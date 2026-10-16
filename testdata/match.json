@@ -1,0 +1,1007 @@
+{
+  "result": 1,
+  "match": {
+    "duration": 1998,
+    "starttime": 1791407595,
+    "players": [
+      {
+        "accountId": 1016408522,
+        "playerSlot": 0,
+        "heroId": 54,
+        "item0": 50,
+        "item1": 108,
+        "item2": 147,
+        "item3": 143,
+        "item4": 137,
+        "item5": 34,
+        "item6": 0,
+        "item7": 0,
+        "item8": 0,
+        "item9": 574,
+        "item10": 1586,
+        "item10Lvl": 3,
+        "mmrType": 1,
+        "kills": 6,
+        "deaths": 3,
+        "assists": 13,
+        "leaverStatus": 0,
+        "gold": 1550,
+        "lastHits": 270,
+        "denies": 26,
+        "goldPerMin": 594,
+        "xpPerMin": 666,
+        "goldSpent": 18750,
+        "heroDamage": 19687,
+        "towerDamage": 14498,
+        "heroHealing": 1309,
+        "disableDuration": 3,
+        "level": 20,
+        "playerName": "Зеркальная броня",
+        "partyId": 0,
+        "scaledHeroDamage": 13172,
+        "scaledTowerDamage": 7082,
+        "scaledHeroHealing": 394,
+        "permanentBuffs": [
+          {
+            "permanentBuff": 16,
+            "stackCount": 339,
+            "grantTime": 572
+          }
+        ],
+        "activePlusSubscription": true,
+        "netWorth": 19625,
+        "heroPickOrder": 5,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 14075,
+            "postReduction": 7978,
+            "damageType": 0
+          },
+          {
+            "preReduction": 25068,
+            "postReduction": 16010,
+            "damageType": 1
+          },
+          {
+            "preReduction": 1000,
+            "postReduction": 1000,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 91,
+        "goldLostToDeath": 394,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 1,
+        "outpostsCaptured": 0,
+        "teamNumber": 0,
+        "teamSlot": 0,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 163914851,
+        "playerSlot": 1,
+        "heroId": 42,
+        "item0": 50,
+        "item1": 36,
+        "item2": 98,
+        "item3": 137,
+        "item4": 1,
+        "item5": 108,
+        "item6": 0,
+        "item7": 0,
+        "item8": 0,
+        "item9": 1873,
+        "item10": 1586,
+        "item10Lvl": 3,
+        "mmrType": 1,
+        "kills": 13,
+        "deaths": 2,
+        "assists": 15,
+        "leaverStatus": 0,
+        "gold": 1898,
+        "lastHits": 244,
+        "denies": 4,
+        "goldPerMin": 652,
+        "xpPerMin": 886,
+        "goldSpent": 20455,
+        "heroDamage": 27209,
+        "towerDamage": 9694,
+        "heroHealing": 250,
+        "disableDuration": 36,
+        "level": 23,
+        "playerName": "jah bless",
+        "partyId": 0,
+        "scaledHeroDamage": 20584,
+        "scaledTowerDamage": 4300,
+        "scaledHeroHealing": 240,
+        "activePlusSubscription": true,
+        "netWorth": 21558,
+        "heroPickOrder": 4,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 25944,
+            "postReduction": 17705,
+            "damageType": 0
+          },
+          {
+            "preReduction": 20666,
+            "postReduction": 14578,
+            "damageType": 1
+          },
+          {
+            "preReduction": 1192,
+            "postReduction": 1197,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 80,
+        "goldLostToDeath": 292,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 2,
+        "outpostsCaptured": 0,
+        "teamNumber": 0,
+        "teamSlot": 1,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 189896622,
+        "playerSlot": 2,
+        "heroId": 110,
+        "item0": 214,
+        "item1": 40,
+        "item2": 267,
+        "item3": 0,
+        "item4": 36,
+        "item5": 100,
+        "item6": 188,
+        "item7": 0,
+        "item8": 0,
+        "item9": 1599,
+        "item10": 1593,
+        "item10Lvl": 2,
+        "mmrType": 1,
+        "kills": 9,
+        "deaths": 11,
+        "assists": 18,
+        "leaverStatus": 0,
+        "gold": 2018,
+        "lastHits": 37,
+        "denies": 2,
+        "goldPerMin": 363,
+        "xpPerMin": 377,
+        "goldSpent": 9650,
+        "heroDamage": 14117,
+        "towerDamage": 89,
+        "heroHealing": 999,
+        "disableDuration": 2,
+        "level": 15,
+        "playerName": "sean",
+        "partyId": 0,
+        "scaledHeroDamage": 10587,
+        "scaledTowerDamage": 51,
+        "scaledHeroHealing": 383,
+        "permanentBuffs": [
+          {
+            "permanentBuff": 12,
+            "stackCount": 0,
+            "grantTime": 1939
+          }
+        ],
+        "activePlusSubscription": true,
+        "netWorth": 10313,
+        "heroPickOrder": 8,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 8990,
+            "postReduction": 6754,
+            "damageType": 0
+          },
+          {
+            "preReduction": 11782,
+            "postReduction": 7785,
+            "damageType": 1
+          },
+          {
+            "preReduction": 1103,
+            "postReduction": 1105,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 346,
+        "goldLostToDeath": 1144,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 0,
+        "outpostsCaptured": 0,
+        "teamNumber": 0,
+        "teamSlot": 2,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 1486870030,
+        "playerSlot": 3,
+        "heroId": 85,
+        "item0": 180,
+        "item1": 254,
+        "item2": 40,
+        "item3": 12,
+        "item4": 60,
+        "item5": 42,
+        "item6": 23,
+        "item7": 36,
+        "item8": 22,
+        "item9": 840,
+        "item10": 1577,
+        "item10Lvl": 3,
+        "mmrType": 1,
+        "kills": 6,
+        "deaths": 5,
+        "assists": 21,
+        "leaverStatus": 0,
+        "gold": 1075,
+        "lastHits": 37,
+        "denies": 0,
+        "goldPerMin": 327,
+        "xpPerMin": 478,
+        "goldSpent": 9690,
+        "heroDamage": 11270,
+        "towerDamage": 0,
+        "heroHealing": 4155,
+        "disableDuration": 0,
+        "level": 17,
+        "playerName": "Пенис67",
+        "partyId": 0,
+        "scaledHeroDamage": 10940,
+        "scaledTowerDamage": 0,
+        "scaledHeroHealing": 1994,
+        "permanentBuffs": [
+          {
+            "permanentBuff": 12,
+            "stackCount": 0,
+            "grantTime": 1839
+          }
+        ],
+        "activePlusSubscription": false,
+        "netWorth": 10140,
+        "heroPickOrder": 2,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 8901,
+            "postReduction": 7123,
+            "damageType": 0
+          },
+          {
+            "preReduction": 10080,
+            "postReduction": 5736,
+            "damageType": 1
+          },
+          {
+            "preReduction": 389,
+            "postReduction": 390,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 91,
+        "goldLostToDeath": 755,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 0,
+        "outpostsCaptured": 1,
+        "teamNumber": 0,
+        "teamSlot": 3,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 328601101,
+        "playerSlot": 4,
+        "heroId": 91,
+        "item0": 119,
+        "item1": 37,
+        "item2": 41,
+        "item3": 36,
+        "item4": 235,
+        "item5": 108,
+        "item6": 0,
+        "item7": 0,
+        "item8": 0,
+        "item9": 1604,
+        "item10": 1583,
+        "item10Lvl": 3,
+        "mmrType": 1,
+        "kills": 9,
+        "deaths": 1,
+        "assists": 17,
+        "leaverStatus": 0,
+        "gold": 6940,
+        "lastHits": 340,
+        "denies": 9,
+        "goldPerMin": 707,
+        "xpPerMin": 940,
+        "goldSpent": 17235,
+        "heroDamage": 33017,
+        "towerDamage": 2908,
+        "heroHealing": 9920,
+        "disableDuration": 0,
+        "level": 23,
+        "playerName": "евнушок.jinada",
+        "partyId": 0,
+        "scaledHeroDamage": 21671,
+        "scaledTowerDamage": 1546,
+        "scaledHeroHealing": 2327,
+        "activePlusSubscription": true,
+        "netWorth": 23575,
+        "heroPickOrder": 1,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 11293,
+            "postReduction": 5441,
+            "damageType": 0
+          },
+          {
+            "preReduction": 18632,
+            "postReduction": 12018,
+            "damageType": 1
+          },
+          {
+            "preReduction": 788,
+            "postReduction": 791,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 25,
+        "goldLostToDeath": 0,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 6,
+        "outpostsCaptured": 0,
+        "teamNumber": 0,
+        "teamSlot": 4,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 360949358,
+        "playerSlot": 128,
+        "heroId": 49,
+        "item0": 1,
+        "item1": 178,
+        "item2": 116,
+        "item3": 36,
+        "item4": 63,
+        "item5": 0,
+        "item6": 0,
+        "item7": 0,
+        "item8": 0,
+        "item9": 1599,
+        "item10": 1586,
+        "item10Lvl": 2,
+        "mmrType": 1,
+        "kills": 4,
+        "deaths": 13,
+        "assists": 7,
+        "leaverStatus": 0,
+        "gold": 179,
+        "lastHits": 198,
+        "denies": 9,
+        "goldPerMin": 390,
+        "xpPerMin": 414,
+        "goldSpent": 10800,
+        "heroDamage": 29006,
+        "towerDamage": 0,
+        "heroHealing": 0,
+        "disableDuration": 61,
+        "level": 15,
+        "playerName": "YANDEXMAPS ANDUDU",
+        "partyId": 0,
+        "scaledHeroDamage": 15859,
+        "scaledTowerDamage": 0,
+        "scaledHeroHealing": 0,
+        "permanentBuffs": [
+          {
+            "permanentBuff": 12,
+            "stackCount": 0,
+            "grantTime": 1780
+          }
+        ],
+        "activePlusSubscription": true,
+        "netWorth": 10644,
+        "heroPickOrder": 7,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 33557,
+            "postReduction": 15565,
+            "damageType": 0
+          },
+          {
+            "preReduction": 33467,
+            "postReduction": 20593,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 345,
+        "goldLostToDeath": 1574,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 2,
+        "outpostsCaptured": 0,
+        "teamNumber": 1,
+        "teamSlot": 0,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 330118199,
+        "playerSlot": 129,
+        "heroId": 50,
+        "item0": 254,
+        "item1": 23,
+        "item2": 36,
+        "item3": 40,
+        "item4": 593,
+        "item5": 180,
+        "item6": 188,
+        "item7": 43,
+        "item8": 0,
+        "item9": 359,
+        "item10": 1593,
+        "item10Lvl": 1,
+        "mmrType": 1,
+        "kills": 1,
+        "deaths": 10,
+        "assists": 9,
+        "leaverStatus": 0,
+        "gold": 717,
+        "lastHits": 37,
+        "denies": 2,
+        "goldPerMin": 227,
+        "xpPerMin": 361,
+        "goldSpent": 6990,
+        "heroDamage": 11721,
+        "towerDamage": 0,
+        "heroHealing": 5862,
+        "disableDuration": 21,
+        "level": 14,
+        "playerName": "грибочки  ягодки",
+        "partyId": 0,
+        "scaledHeroDamage": 8627,
+        "scaledTowerDamage": 0,
+        "scaledHeroHealing": 3316,
+        "activePlusSubscription": true,
+        "netWorth": 6467,
+        "heroPickOrder": 9,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 10713,
+            "postReduction": 6304,
+            "damageType": 0
+          },
+          {
+            "preReduction": 17475,
+            "postReduction": 9246,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 272,
+        "goldLostToDeath": 573,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 2,
+        "outpostsCaptured": 0,
+        "teamNumber": 1,
+        "teamSlot": 1,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 1286441722,
+        "playerSlot": 130,
+        "heroId": 13,
+        "item0": 63,
+        "item1": 36,
+        "item2": 1806,
+        "item3": 1,
+        "item4": 41,
+        "item5": 40,
+        "item6": 0,
+        "item7": 0,
+        "item8": 0,
+        "item9": 1640,
+        "item10": 1583,
+        "item10Lvl": 3,
+        "mmrType": 1,
+        "kills": 7,
+        "deaths": 2,
+        "assists": 5,
+        "leaverStatus": 0,
+        "gold": 2043,
+        "lastHits": 243,
+        "denies": 7,
+        "goldPerMin": 468,
+        "xpPerMin": 611,
+        "goldSpent": 14015,
+        "heroDamage": 31782,
+        "towerDamage": 378,
+        "heroHealing": 0,
+        "disableDuration": 1,
+        "level": 19,
+        "playerName": "изи бро",
+        "partyId": 0,
+        "scaledHeroDamage": 18334,
+        "scaledTowerDamage": 239,
+        "scaledHeroHealing": 0,
+        "permanentBuffs": [
+          {
+            "permanentBuff": 12,
+            "stackCount": 0,
+            "grantTime": 1780
+          }
+        ],
+        "activePlusSubscription": false,
+        "netWorth": 14543,
+        "heroPickOrder": 10,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 7529,
+            "postReduction": 3986,
+            "damageType": 0
+          },
+          {
+            "preReduction": 20183,
+            "postReduction": 11643,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 131,
+        "goldLostToDeath": 707,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 2,
+        "outpostsCaptured": 0,
+        "teamNumber": 1,
+        "teamSlot": 2,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 1145695932,
+        "playerSlot": 131,
+        "heroId": 46,
+        "item0": 1,
+        "item1": 63,
+        "item2": 263,
+        "item3": 168,
+        "item4": 596,
+        "item5": 8,
+        "item6": 36,
+        "item7": 21,
+        "item8": 0,
+        "item9": 950,
+        "item10": 1584,
+        "item10Lvl": 3,
+        "mmrType": 1,
+        "kills": 6,
+        "deaths": 9,
+        "assists": 4,
+        "leaverStatus": 0,
+        "gold": 305,
+        "lastHits": 351,
+        "denies": 15,
+        "goldPerMin": 537,
+        "xpPerMin": 658,
+        "goldSpent": 17705,
+        "heroDamage": 21318,
+        "towerDamage": 0,
+        "heroHealing": 0,
+        "disableDuration": 0,
+        "level": 20,
+        "playerName": "чужой",
+        "partyId": 0,
+        "scaledHeroDamage": 12533,
+        "scaledTowerDamage": 0,
+        "scaledHeroHealing": 0,
+        "activePlusSubscription": true,
+        "netWorth": 16190,
+        "heroPickOrder": 3,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 21359,
+            "postReduction": 8218,
+            "damageType": 0
+          },
+          {
+            "preReduction": 22811,
+            "postReduction": 11497,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 353,
+        "goldLostToDeath": 2039,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 1,
+        "outpostsCaptured": 0,
+        "teamNumber": 1,
+        "teamSlot": 3,
+        "selectedFacet": 0
+      },
+      {
+        "accountId": 1521598481,
+        "playerSlot": 132,
+        "heroId": 88,
+        "item0": 104,
+        "item1": 218,
+        "item2": 0,
+        "item3": 180,
+        "item4": 0,
+        "item5": 36,
+        "item6": 0,
+        "item7": 0,
+        "item8": 0,
+        "item9": 1604,
+        "item10": 1593,
+        "item10Lvl": 1,
+        "mmrType": 1,
+        "kills": 1,
+        "deaths": 9,
+        "assists": 8,
+        "leaverStatus": 0,
+        "gold": 547,
+        "lastHits": 51,
+        "denies": 5,
+        "goldPerMin": 215,
+        "xpPerMin": 259,
+        "goldSpent": 6570,
+        "heroDamage": 12305,
+        "towerDamage": 7,
+        "heroHealing": 0,
+        "disableDuration": 69,
+        "level": 12,
+        "playerName": "МОКИ-МАРМОКИ",
+        "partyId": 0,
+        "scaledHeroDamage": 6759,
+        "scaledTowerDamage": 5,
+        "scaledHeroHealing": 0,
+        "activePlusSubscription": true,
+        "netWorth": 5707,
+        "heroPickOrder": 6,
+        "heroWasRandomed": false,
+        "heroWasDotaPlusSuggestion": false,
+        "heroDamageReceived": [
+          {
+            "preReduction": 11549,
+            "postReduction": 6488,
+            "damageType": 0
+          },
+          {
+            "preReduction": 18548,
+            "postReduction": 11760,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "heroDamageDealt": [
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 0
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 1
+          },
+          {
+            "preReduction": 0,
+            "postReduction": 0,
+            "damageType": 2
+          }
+        ],
+        "secondsDead": 246,
+        "goldLostToDeath": 348,
+        "laneSelectionFlags": 0,
+        "bountyRunes": 0,
+        "outpostsCaptured": 0,
+        "teamNumber": 1,
+        "teamSlot": 4,
+        "selectedFacet": 0
+      }
+    ],
+    "matchId": 9034163193,
+    "towerStatus": [
+      2039,
+      0
+    ],
+    "barracksStatus": [
+      63,
+      63
+    ],
+    "cluster": 184,
+    "firstBloodTime": 107,
+    "replaySalt": 141670388,
+    "lobbyType": 1,
+    "humanPlayers": 10,
+    "radiantTeamId": 8398273,
+    "leagueid": 0,
+    "radiantTeamName": "ZaкрытыйКраник",
+    "radiantTeamLogo": 9755348422496538822,
+    "radiantTeamLogoUrl": "",
+    "radiantTeamComplete": 0,
+    "gameMode": 16,
+    "picksBans": [
+      {
+        "isPick": false,
+        "team": 1,
+        "heroId": 25
+      },
+      {
+        "isPick": false,
+        "team": 0,
+        "heroId": 48
+      },
+      {
+        "isPick": false,
+        "team": 1,
+        "heroId": 80
+      },
+      {
+        "isPick": false,
+        "team": 0,
+        "heroId": 36
+      },
+      {
+        "isPick": false,
+        "team": 1,
+        "heroId": 26
+      },
+      {
+        "isPick": false,
+        "team": 0,
+        "heroId": 51
+      },
+      {
+        "isPick": true,
+        "team": 1,
+        "heroId": 88
+      },
+      {
+        "isPick": true,
+        "team": 0,
+        "heroId": 110
+      },
+      {
+        "isPick": true,
+        "team": 0,
+        "heroId": 85
+      },
+      {
+        "isPick": true,
+        "team": 1,
+        "heroId": 46
+      },
+      {
+        "isPick": true,
+        "team": 1,
+        "heroId": 50
+      },
+      {
+        "isPick": true,
+        "team": 0,
+        "heroId": 42
+      },
+      {
+        "isPick": true,
+        "team": 0,
+        "heroId": 91
+      },
+      {
+        "isPick": true,
+        "team": 1,
+        "heroId": 49
+      },
+      {
+        "isPick": true,
+        "team": 1,
+        "heroId": 13
+      },
+      {
+        "isPick": true,
+        "team": 0,
+        "heroId": 54
+      }
+    ],
+    "replayState": 0,
+    "seriesId": 0,
+    "seriesType": 0,
+    "engine": 1,
+    "matchFlags": 9,
+    "privateMetadataKey": 3697617549,
+    "radiantTeamScore": 43,
+    "direTeamScore": 20,
+    "matchOutcome": 2,
+    "preGameDuration": 90
+  }
+}
