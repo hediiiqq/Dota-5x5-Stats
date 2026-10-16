@@ -36,7 +36,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 				return "", confirmation.Type, nil
 			}
 		}
-		return "", 0, fmt.Errorf("Steam не предложил подтверждение через телефон %v", account.Name)
+		return "", 0, fmt.Errorf("steam не предложил подтверждение через телефон %v", account.Name)
 	}
 	steamLoginInfo.ShouldRememberPassword = true
 
@@ -57,6 +57,12 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 		log.Printf("Steam connection failed: %v %v", err, account.Name)
 		return
 	}
+
+	helloTicker := time.NewTicker(5 * time.Second)
+	defer helloTicker.Stop()
+
+	loggedIn := false
+	gcReady := false
 
 	for {
 		select {
@@ -91,9 +97,10 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 			case *steam.LoggedOnEvent:
 				if event.Result == steamlang.EResult_OK {
 					log.Printf("Logged on steam %v", account.Name)
+					loggedIn = true
 					dota.SetPlaying(true)
 					dota.SayHello()
-					log.Println("Приветстие GC отправленно")
+					log.Printf("Приветствие GC отправлено %v", account.Name)
 				} else {
 					log.Printf("Steam login failed: %v %v", event.Result, account.Name)
 					accountCancel()
@@ -106,9 +113,15 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 				log.Printf("Disconnected from Steam %v", account.Name)
 				return
 			case *events.ClientWelcomed:
-				log.Printf("Координатор Доты готов %v", account.Name)
-				accountId := client.SteamId().GetAccountId()
-				go HistoryDota(accountCtx, dota, &accountId)
+				if gcReady == true {
+					continue
+				} else {
+					accountId := client.SteamId().GetAccountId()
+					go HistoryDota(accountCtx, dota, &accountId)
+					gcReady = true
+					helloTicker.Stop()
+					log.Printf("Координатор Доты готов %v", account.Name)
+				}
 			case *events.GCConnectionStatusChanged:
 				log.Printf("GC connection status changed:%v %v", event.NewState, account.Name)
 
@@ -120,6 +133,11 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 		case <-accountCtx.Done():
 			log.Printf("Connection timed out %v", account.Name)
 			return
+		case <-helloTicker.C:
+			if loggedIn && !gcReady {
+				dota.SayHello()
+				log.Printf("Повторное приветствие GC: %s", account.Name)
+			}
 		}
 	}
 
