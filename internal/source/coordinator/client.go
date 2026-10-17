@@ -10,6 +10,7 @@ import (
 
 	"github.com/paralin/go-dota2"
 	"github.com/paralin/go-dota2/events"
+	"github.com/paralin/go-dota2/protocol"
 	"github.com/paralin/go-steam"
 	"github.com/paralin/go-steam/protocol/protobuf/unified"
 	"github.com/paralin/go-steam/protocol/steamlang"
@@ -19,11 +20,11 @@ import (
 )
 
 type Matchs struct {
-	Ids []uint64
-	err error
+	Matches []*protocol.CMsgDOTAMatch
+	err     error
 }
 
-func RunAccount(ctx context.Context, account config.SteamAccount) ([]uint64, error) {
+func RunAccount(ctx context.Context, account config.SteamAccount, checkMatch func(ctx context.Context, uint65 uint64) (bool, error)) ([]*protocol.CMsgDOTAMatch, error) {
 
 	historyResult := make(chan Matchs, 1)
 
@@ -70,6 +71,8 @@ func RunAccount(ctx context.Context, account config.SteamAccount) ([]uint64, err
 
 	loggedIn := false
 	gcReady := false
+
+	var matches []*protocol.CMsgDOTAMatch
 
 	for {
 		select {
@@ -136,7 +139,32 @@ func RunAccount(ctx context.Context, account config.SteamAccount) ([]uint64, err
 					accountId := client.SteamId().GetAccountId()
 					go func() {
 						matchIDs, err := HistoryDota(accountCtx, dota, &accountId)
-						historyResult <- Matchs{Ids: matchIDs, err: err}
+						if err != nil {
+							log.Printf("Steam history dota failed: %v %v", err, account.Name)
+							historyResult <- Matchs{err: err}
+							return
+						}
+
+						for _, matchID := range matchIDs {
+							check, err := checkMatch(accountCtx, matchID)
+							if err != nil {
+								log.Printf("Steam check failed: %v %v", err, account.Name)
+								continue
+							}
+							if check == true {
+								log.Printf("Match %v found, skip", matchID)
+								continue
+							}
+							match, err := MatchDetails(accountCtx, dota, matchID)
+							if err != nil {
+								log.Printf("Steam history dota failed: %v %v", err, account.Name)
+								continue
+							}
+							matches = append(matches, match)
+							log.Printf("Steam history dota match: %v", match.GetMatchId())
+
+						}
+						historyResult <- Matchs{Matches: matches, err: err}
 					}()
 					gcReady = true
 					helloTicker.Stop()
@@ -161,7 +189,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount) ([]uint64, err
 
 			}
 		case result := <-historyResult:
-			return result.Ids, result.err
+			return result.Matches, result.err
 		case <-accountCtx.Done():
 			log.Printf("отмена или таймаут %v", account.Name)
 			return nil, accountCtx.Err()

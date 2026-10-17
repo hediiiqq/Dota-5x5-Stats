@@ -2,6 +2,7 @@ package coordinator
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/paralin/go-dota2"
@@ -54,4 +55,17 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32) ([]u
 
 	}
 	return matchIDs, nil
+}
+
+func MatchDetails(ctx context.Context, dota *dota2.Dota2, matchID uint64) (*protocol.CMsgDOTAMatch, error) {
+	answer, err := dota.RequestMatchDetails(ctx, matchID)
+	if err != nil {
+		return nil, err
+	}
+
+	if answer.GetMatch() == nil {
+		return nil, fmt.Errorf("координатор не вернул матч %d: result=%d", matchID, answer.GetResult())
+	}
+
+	return answer.GetMatch(), nil
 }
