@@ -18,7 +18,14 @@ import (
 	"dota-stats/internal/config"
 )
 
-func RunAccount(ctx context.Context, account config.SteamAccount) {
+type Matchs struct {
+	Ids []uint64
+	err error
+}
+
+func RunAccount(ctx context.Context, account config.SteamAccount) ([]uint64, error) {
+
+	historyResult := make(chan Matchs, 1)
 
 	accountCtx, accountCancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer accountCancel()
@@ -55,7 +62,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 
 	if _, err := client.ConnectContext(accountCtx); err != nil {
 		log.Printf("Steam connection failed: %v %v", err, account.Name)
-		return
+		return nil, err
 	}
 
 	helloTicker := time.NewTicker(5 * time.Second)
@@ -77,7 +84,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 						token, err := client.Auth.Authenticate(authCtx, steamLoginInfo)
 						if err != nil {
 							log.Printf("Steam authentication failed: %v %v", err, account.Name)
-							accountCancel()
+							historyResult <- Matchs{err: err}
 							return
 						}
 						steamLoginInfo.AccessToken = token
@@ -91,7 +98,8 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 
 					if err := client.Auth.LogOn(authCtx, steamLoginInfo); err != nil {
 						log.Printf("Steam login failed: %v %v", err, account.Name)
-						accountCancel()
+						historyResult <- Matchs{err: err}
+						return
 					}
 				}()
 			case *steam.LoggedOnEvent:
@@ -103,21 +111,33 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 					log.Printf("Приветствие GC отправлено %v", account.Name)
 				} else {
 					log.Printf("Steam login failed: %v %v", event.Result, account.Name)
-					accountCancel()
+					return nil, fmt.Errorf("Steam login failed: %v %v", event.Result, account.Name)
+
 				}
 			case *steam.LogOnFailedEvent:
 				log.Printf("failed to log on steam: %v, auth session state: %v %v", event.Err, event.AuthSessionState, account.Name)
 				accountCancel()
-				return
+				return nil, fmt.Errorf(
+					"steam login failed: result=%v, reason=%v acc %v",
+					event.Result,
+					event.Err,
+					account.Name,
+				)
 			case *steam.DisconnectedEvent:
 				log.Printf("Disconnected from Steam %v", account.Name)
-				return
+				return nil, fmt.Errorf(
+					"steam отключился на аккаунте %v",
+					account.Name,
+				)
 			case *events.ClientWelcomed:
 				if gcReady == true {
 					continue
 				} else {
 					accountId := client.SteamId().GetAccountId()
-					go HistoryDota(accountCtx, dota, &accountId)
+					go func() {
+						matchIDs, err := HistoryDota(accountCtx, dota, &accountId)
+						historyResult <- Matchs{Ids: matchIDs, err: err}
+					}()
 					gcReady = true
 					helloTicker.Stop()
 					log.Printf("Координатор Доты готов %v", account.Name)
@@ -125,19 +145,32 @@ func RunAccount(ctx context.Context, account config.SteamAccount) {
 			case *events.GCConnectionStatusChanged:
 				log.Printf("GC connection status changed:%v %v", event.NewState, account.Name)
 
+			case *steam.PlayingSessionStateEvent:
+				if event.PlayingBlocked == true {
+					log.Printf("Обновление пропущено: игровая сессия аккаунта занята %v %v", account.Name, event.PlayingApp)
+					accountCancel()
+					return nil, fmt.Errorf(
+						"игровая сессия занята на аккаунте %v",
+						account.Name,
+					)
+				}
+
 			case error:
 				log.Printf("Steam error: %v %v", event, account.Name)
-				return
+				return nil, event
 
 			}
+		case result := <-historyResult:
+			return result.Ids, result.err
 		case <-accountCtx.Done():
-			log.Printf("Connection timed out %v", account.Name)
-			return
+			log.Printf("отмена или таймаут %v", account.Name)
+			return nil, accountCtx.Err()
 		case <-helloTicker.C:
 			if loggedIn && !gcReady {
 				dota.SayHello()
 				log.Printf("Повторное приветствие GC: %s", account.Name)
 			}
+
 		}
 	}
 

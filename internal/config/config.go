@@ -21,6 +21,14 @@ func init() {
 	}
 }
 
+func DB() string {
+	DbUrl := os.Getenv("DB_URL")
+	if DbUrl == "" {
+		log.Println("DB_URL env variable not set")
+	}
+	return DbUrl
+}
+
 func Load() []SteamAccount {
 	account1 := SteamAccount{
 		Name:  "whymiutu",
