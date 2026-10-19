@@ -4,56 +4,132 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/paralin/go-dota2"
 	"github.com/paralin/go-dota2/protocol"
 )
 
-func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32) ([]uint64, error) {
+func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minAllowedMatchID uint64) ([]uint64, error) {
+
+	var startAtMatchID uint64
 
 	var ReqMatches uint32 = 20
 	var PracticeMatches bool = true
+	matchIDs := make([]uint64, 0)
+
+	seen := make(map[uint64]bool)
 
 	request := protocol.CMsgDOTAGetPlayerMatchHistory{
 		AccountId:              accountID,
 		MatchesRequested:       &ReqMatches,
 		IncludePracticeMatches: &PracticeMatches,
+		StartAtMatchId:         &startAtMatchID,
 	}
 
-	//var startAtMatchID uint64 = 0
-
-	answer, err := dota.GetPlayerMatchHistory(ctx, &request)
-	if err != nil {
-		log.Printf("Error getting match history: %v", err)
-		return nil, err
-	}
-	log.Printf("Match history: %v", len(answer.Matches))
-
-	var minMatchID uint64 = 0
-
-	for _, match := range answer.Matches {
-		if *match.MatchId == minMatchID && *match.MatchId == 0 {
-			continue
+	emptyAttempts := 0
+	var delay time.Duration
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
 		}
-		if minMatchID == 0 || *match.MatchId < minMatchID {
-			minMatchID = *match.MatchId
+		log.Printf("Аккаунт с ID %d: запрос страницы истории; курсор=%d, попытка получить непустую страницу=%d из 3", *accountID, startAtMatchID, emptyAttempts+1)
+		started := time.Now()
+		answer, err := dota.GetPlayerMatchHistory(ctx, &request)
+		if err != nil {
+			log.Printf("Аккаунт с ID %d: не удалось получить страницу истории с курсором %d: %v", *accountID, startAtMatchID, err)
+			return nil, err
 		}
-
-	}
-	log.Printf("min match id : %v", minMatchID)
-
-	matchIDs := make([]uint64, 0)
-
-	for idx, match := range answer.Matches {
-
-		if match.LobbyType != nil && match.GetLobbyType() == 1 && (match.GetGameMode() == 16 || match.GetGameMode() == 2) {
-			log.Printf("id: %v, gameMode:%v, acc: %v, lobby type: %v, matchid: %v", idx, match.GetGameMode(), *accountID, match.GetLobbyType(), match.GetMatchId())
-			if match.MatchId != nil && match.GetMatchId() != 0 {
-				matchIDs = append(matchIDs, match.GetMatchId())
+		log.Printf("Аккаунт с ID %d: получена страница истории; курсор=%d, время запроса=%s, записей до фильтрации=%d", *accountID, startAtMatchID, time.Since(started).Round(time.Millisecond), len(answer.Matches))
+		if len(answer.Matches) == 0 {
+			emptyAttempts++
+			if emptyAttempts < 3 {
+				log.Printf("Аккаунт с ID %d: получена пустая страница с курсором %d; повторный запрос через 5 секунд", *accountID, startAtMatchID)
+				delay = 5 * time.Second
+				continue
 			}
+			log.Printf("Аккаунт с ID %d: загрузка истории остановлена после трёх пустых ответов подряд; курсор=%d", *accountID, startAtMatchID)
+			break
+		}
+		emptyAttempts = 0
+		delay = 2 * time.Second
+
+		var minMatchID uint64 = 0
+
+		for _, match := range answer.Matches {
+
+			if match == nil {
+				log.Printf("Аккаунт с ID %d: при поиске следующего курсора пропущена отсутствующая запись истории", *accountID)
+				continue
+			}
+
+			if match.GetMatchId() == 0 {
+				log.Printf("Аккаунт с ID %d: при поиске следующего курсора пропущена запись без ненулевого ID матча Dota", *accountID)
+				continue
+			}
+
+			if minMatchID == 0 || match.GetMatchId() < minMatchID {
+
+				minMatchID = match.GetMatchId()
+			}
+
+		}
+		log.Printf("Аккаунт с ID %d: обработана страница с курсором %d; минимальный ненулевой ID матча Dota=%d (0 — подходящих ID нет)", *accountID, startAtMatchID, minMatchID)
+
+		for idx, match := range answer.Matches {
+
+			if match == nil {
+				log.Printf("Аккаунт с ID %d: при отборе матчей пропущена отсутствующая запись истории", *accountID)
+				continue
+			}
+
+			if match.LobbyType != nil && match.GetLobbyType() == 1 && (match.GetGameMode() == 16 || match.GetGameMode() == 2) {
+				log.Printf("Запись истории с индексом %d соответствует фильтру лобби и режима: режим=%v, ID аккаунта=%d, тип лобби=%d, ID матча Dota=%d; остальные проверки ещё не выполнены", idx, match.GetGameMode(), *accountID, match.GetLobbyType(), match.GetMatchId())
+
+				if match.GetMatchId() < minAllowedMatchID {
+					log.Printf("Аккаунт с ID %d: матч Dota %d пропущен — ID меньше нижней границы %d", *accountID, match.GetMatchId(), minAllowedMatchID)
+					continue
+				}
+
+				if match.MatchId == nil {
+					log.Printf("Аккаунт с ID %d: пропущена запись истории без ID матча Dota", *accountID)
+					continue
+				}
+				if match.GetMatchId() == 0 {
+					log.Printf("Аккаунт с ID %d: пропущена запись истории с нулевым ID матча Dota", *accountID)
+					continue
+				}
+				id := match.GetMatchId()
+
+				if seen[id] {
+					log.Printf("Аккаунт с ID %d: повторная запись матча Dota %d пропущена", *accountID, id)
+					continue
+				}
+				seen[id] = true
+				matchIDs = append(matchIDs, id)
+			}
+
 		}
 
+		if minMatchID == 0 {
+			log.Printf("Аккаунт с ID %d: загрузка истории остановлена — на странице нет ненулевых ID матчей Dota", *accountID)
+			break
+		}
+		if minMatchID <= minAllowedMatchID {
+			log.Printf("Аккаунт с ID %d: загрузка истории остановлена — достигнута нижняя граница %d; минимальный ID матча на странице=%d", *accountID, minAllowedMatchID, minMatchID)
+			break
+		}
+		if startAtMatchID != 0 && minMatchID >= startAtMatchID {
+			log.Printf("Аккаунт с ID %d: загрузка истории остановлена — курсор не продвинулся к более старым матчам; текущий курсор=%d, минимальный ID на странице=%d", *accountID, startAtMatchID, minMatchID)
+			break
+		} else {
+			startAtMatchID = minMatchID
+
+		}
 	}
+
 	return matchIDs, nil
 }
 
@@ -64,7 +140,7 @@ func MatchDetails(ctx context.Context, dota *dota2.Dota2, matchID uint64) (*prot
 	}
 
 	if answer.GetMatch() == nil {
-		return nil, fmt.Errorf("координатор не вернул матч %d: result=%d", matchID, answer.GetResult())
+		return nil, fmt.Errorf("координатор Dota 2 не вернул объект матча %d; код результата=%d", matchID, answer.GetResult())
 	}
 
 	return answer.GetMatch(), nil

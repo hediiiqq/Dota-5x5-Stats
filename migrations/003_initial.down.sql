@@ -1,0 +1,1 @@
+drop table public.gc_sync_state;

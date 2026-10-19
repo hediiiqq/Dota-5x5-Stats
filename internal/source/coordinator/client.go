@@ -24,11 +24,11 @@ type Matchs struct {
 	err     error
 }
 
-func RunAccount(ctx context.Context, account config.SteamAccount, checkMatch func(ctx context.Context, uint65 uint64) (bool, error)) ([]*protocol.CMsgDOTAMatch, error) {
+func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatchID uint64, checkMatch func(ctx context.Context, uint65 uint64) (bool, error)) ([]*protocol.CMsgDOTAMatch, error) {
 
 	historyResult := make(chan Matchs, 1)
 
-	accountCtx, accountCancel := context.WithTimeout(ctx, 5*time.Minute)
+	accountCtx, accountCancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer accountCancel()
 	steamLoginInfo := new(steam.LogOnDetails)
 	steamLoginInfo.Username = account.Login
@@ -40,20 +40,20 @@ func RunAccount(ctx context.Context, account config.SteamAccount, checkMatch fun
 	) (string, unified.EAuthSessionGuardType, error) {
 		for _, confirmation := range confirmations {
 			if confirmation.Type == unified.EAuthSessionGuardType_k_EAuthSessionGuardType_DeviceConfirmation {
-				log.Printf("Подтверди вход в приложении Steam на телефоне %v", account.Name)
+				log.Printf("Аккаунт %s: подтвердите вход в мобильном приложении Steam", account.Name)
 				return "", confirmation.Type, nil
 			}
 		}
-		return "", 0, fmt.Errorf("steam не предложил подтверждение через телефон %v", account.Name)
+		return "", 0, fmt.Errorf("аккаунт %s: Steam не предложил подтверждение входа через мобильное приложение", account.Name)
 	}
 	steamLoginInfo.ShouldRememberPassword = true
 
 	if file, err := os.ReadFile(account.Token); err == nil {
 		steamLoginInfo.AccessToken = string(bytes.TrimSpace(file))
 	} else if os.IsNotExist(err) == true {
-		log.Printf("файла не существует %v", account.Name)
+		log.Printf("Аккаунт %s: файл токена %q не найден; потребуется аутентификация", account.Name, account.Token)
 	} else {
-		log.Printf("failed to read %v file: %v %v", account.Token, err, account.Name)
+		log.Printf("Аккаунт %s: не удалось прочитать файл токена %q: %v", account.Name, account.Token, err)
 	}
 
 	client := steam.NewClient()
@@ -62,7 +62,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount, checkMatch fun
 	defer dota.Close()
 
 	if _, err := client.ConnectContext(accountCtx); err != nil {
-		log.Printf("Steam connection failed: %v %v", err, account.Name)
+		log.Printf("Аккаунт %s: не удалось установить соединение со Steam: %v", account.Name, err)
 		return nil, err
 	}
 
@@ -79,57 +79,57 @@ func RunAccount(ctx context.Context, account config.SteamAccount, checkMatch fun
 		case event := <-client.Events():
 			switch event := event.(type) {
 			case *steam.ConnectedEvent:
-				log.Printf("Connected to Steam %v", account.Name)
+				log.Printf("Аккаунт %s: соединение со Steam установлено; вход ещё не завершён", account.Name)
 				go func() {
 					authCtx, authCancel := context.WithTimeout(accountCtx, 180*time.Second)
 					defer authCancel()
 					if steamLoginInfo.AccessToken == "" {
 						token, err := client.Auth.Authenticate(authCtx, steamLoginInfo)
 						if err != nil {
-							log.Printf("Steam authentication failed: %v %v", err, account.Name)
+							log.Printf("Аккаунт %s: не удалось пройти аутентификацию Steam: %v", account.Name, err)
 							historyResult <- Matchs{err: err}
 							return
 						}
 						steamLoginInfo.AccessToken = token
 						err = os.WriteFile(account.Token, []byte(token), 0600)
 						if err != nil {
-							log.Printf("failed write file: %v %v", err, account.Name)
+							log.Printf("Аккаунт %s: не удалось сохранить токен в файл %q: %v", account.Name, account.Token, err)
 
 						}
 
 					}
 
 					if err := client.Auth.LogOn(authCtx, steamLoginInfo); err != nil {
-						log.Printf("Steam login failed: %v %v", err, account.Name)
+						log.Printf("Аккаунт %s: не удалось выполнить вход в Steam: %v", account.Name, err)
 						historyResult <- Matchs{err: err}
 						return
 					}
 				}()
 			case *steam.LoggedOnEvent:
 				if event.Result == steamlang.EResult_OK {
-					log.Printf("Logged on steam %v", account.Name)
+					log.Printf("Аккаунт %s: вход в Steam выполнен", account.Name)
 					loggedIn = true
 					dota.SetPlaying(true)
 					dota.SayHello()
-					log.Printf("Приветствие GC отправлено %v", account.Name)
+					log.Printf("Аккаунт %s: отправлено приветствие координатору Dota 2", account.Name)
 				} else {
-					log.Printf("Steam login failed: %v %v", event.Result, account.Name)
-					return nil, fmt.Errorf("Steam login failed: %v %v", event.Result, account.Name)
+					log.Printf("Аккаунт %s: Steam отклонил вход; результат=%v", account.Name, event.Result)
+					return nil, fmt.Errorf("аккаунт %s: Steam отклонил вход; результат=%v", account.Name, event.Result)
 
 				}
 			case *steam.LogOnFailedEvent:
-				log.Printf("failed to log on steam: %v, auth session state: %v %v", event.Err, event.AuthSessionState, account.Name)
+				log.Printf("Аккаунт %s: вход в Steam завершился ошибкой; результат=%v, состояние сессии аутентификации=%v, причина=%v", account.Name, event.Result, event.AuthSessionState, event.Err)
 				accountCancel()
 				return nil, fmt.Errorf(
-					"steam login failed: result=%v, reason=%v acc %v",
+					"вход в Steam завершился ошибкой: результат=%v, причина=%v, аккаунт=%s",
 					event.Result,
 					event.Err,
 					account.Name,
 				)
 			case *steam.DisconnectedEvent:
-				log.Printf("Disconnected from Steam %v", account.Name)
+				log.Printf("Аккаунт %s: соединение со Steam закрыто", account.Name)
 				return nil, fmt.Errorf(
-					"steam отключился на аккаунте %v",
+					"аккаунт %s: соединение со Steam закрыто до завершения загрузки матчей",
 					account.Name,
 				)
 			case *events.ClientWelcomed:
@@ -138,9 +138,9 @@ func RunAccount(ctx context.Context, account config.SteamAccount, checkMatch fun
 				} else {
 					accountId := client.SteamId().GetAccountId()
 					go func() {
-						matchIDs, err := HistoryDota(accountCtx, dota, &accountId)
+						matchIDs, err := HistoryDota(accountCtx, dota, &accountId, minAllowedMatchID)
 						if err != nil {
-							log.Printf("Steam history dota failed: %v %v", err, account.Name)
+							log.Printf("Аккаунт %s: не удалось получить историю матчей Dota 2: %v", account.Name, err)
 							historyResult <- Matchs{err: err}
 							return
 						}
@@ -148,55 +148,55 @@ func RunAccount(ctx context.Context, account config.SteamAccount, checkMatch fun
 						for _, matchID := range matchIDs {
 							check, err := checkMatch(accountCtx, matchID)
 							if err != nil {
-								log.Printf("Steam check failed: %v %v", err, account.Name)
+								log.Printf("Аккаунт %s: матч Dota %d пропущен — не удалось проверить наличие в базе: %v", account.Name, matchID, err)
 								continue
 							}
 							if check == true {
-								log.Printf("Match %v found, skip", matchID)
+								log.Printf("Аккаунт %s: матч Dota %d уже сохранён; запрос подробностей пропущен", account.Name, matchID)
 								continue
 							}
 							match, err := MatchDetails(accountCtx, dota, matchID)
 							if err != nil {
-								log.Printf("Steam history dota failed: %v %v", err, account.Name)
+								log.Printf("Аккаунт %s: не удалось получить подробности матча Dota %d: %v", account.Name, matchID, err)
 								continue
 							}
 							matches = append(matches, match)
-							log.Printf("Steam history dota match: %v", match.GetMatchId())
+							log.Printf("Аккаунт %s: получены подробности матча Dota %d; запись в базу ещё не выполнена", account.Name, match.GetMatchId())
 
 						}
 						historyResult <- Matchs{Matches: matches, err: err}
 					}()
 					gcReady = true
 					helloTicker.Stop()
-					log.Printf("Координатор Доты готов %v", account.Name)
+					log.Printf("Аккаунт %s: получено приветствие координатора Dota 2; запущена загрузка истории", account.Name)
 				}
 			case *events.GCConnectionStatusChanged:
-				log.Printf("GC connection status changed:%v %v", event.NewState, account.Name)
+				log.Printf("Аккаунт %s: изменилось состояние соединения с координатором Dota 2: %v", account.Name, event.NewState)
 
 			case *steam.PlayingSessionStateEvent:
 				if event.PlayingBlocked == true {
-					log.Printf("Обновление пропущено: игровая сессия аккаунта занята %v %v", account.Name, event.PlayingApp)
+					log.Printf("Аккаунт %s: загрузка матчей прервана — игровая сессия занята; ID приложения=%v", account.Name, event.PlayingApp)
 					accountCancel()
 					return nil, fmt.Errorf(
-						"игровая сессия занята на аккаунте %v",
+						"аккаунт %s: игровая сессия занята",
 						account.Name,
 					)
 				}
 
 			case error:
-				log.Printf("Steam error: %v %v", event, account.Name)
+				log.Printf("Аккаунт %s: получено событие ошибки Steam: %v", account.Name, event)
 				return nil, event
 
 			}
 		case result := <-historyResult:
 			return result.Matches, result.err
 		case <-accountCtx.Done():
-			log.Printf("отмена или таймаут %v", account.Name)
+			log.Printf("Аккаунт %s: работа остановлена контекстом: %v", account.Name, accountCtx.Err())
 			return nil, accountCtx.Err()
 		case <-helloTicker.C:
 			if loggedIn && !gcReady {
 				dota.SayHello()
-				log.Printf("Повторное приветствие GC: %s", account.Name)
+				log.Printf("Аккаунт %s: повторно отправлено приветствие координатору Dota 2; ожидается ответ", account.Name)
 			}
 
 		}

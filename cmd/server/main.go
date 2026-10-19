@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"dota-stats/internal/config"
+	httpapi "dota-stats/internal/http"
 	"dota-stats/internal/repository/postgres"
 	"log"
-	"os"
+	"net/http"
 	"time"
 )
 
@@ -14,7 +15,7 @@ func main() {
 	dbString := config.DB()
 
 	if dbString == "" {
-		log.Fatalln("db_url is empty")
+		log.Fatal("Запуск HTTP-сервера невозможен: переменная DB_URL отсутствует или пуста")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -22,14 +23,18 @@ func main() {
 
 	db, err := postgres.Open_DB(ctx, dbString)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("Не удалось подключиться к PostgreSQL для HTTP-сервера: %v", err)
 	}
 	defer db.Close()
 
-	data, err := os.ReadFile("testdata/match.json")
-	if err != nil {
-		log.Printf("failed to read testdata/match.json: %s", err)
+	router := httpapi.NewRouter(db)
+
+	log.Print("Запуск HTTP-сервера на адресе :8080 (все доступные сетевые интерфейсы)")
+
+	server := &http.Server{Addr: ":8080", Handler: router, ReadTimeout: 5 * time.Second}
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("HTTP-сервер завершился с ошибкой: %v", err)
 	}
-	log.Printf("data: %s", string(data))
 
 }

@@ -11,13 +11,13 @@ func Open_DB(ctx context.Context, dbUrl string) (*pgxpool.Pool, error) {
 
 	dbpool, err := pgxpool.New(ctx, dbUrl)
 	if err != nil {
-		log.Printf("Не удалось создать пул соединений: %v", err)
+		log.Printf("Не удалось создать пул соединений с PostgreSQL: %v", err)
 		return nil, err
 	}
 
 	err = dbpool.Ping(ctx)
 	if err != nil {
-		log.Printf("Не удалось достучаться до базы данных: %v\n", err)
+		log.Printf("Не удалось проверить соединение с PostgreSQL: %v", err)
 		dbpool.Close()
 		return nil, err
 	}

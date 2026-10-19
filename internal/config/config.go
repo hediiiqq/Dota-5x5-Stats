@@ -17,14 +17,14 @@ type SteamAccount struct {
 func init() {
 	// loads values from .env into the system
 	if err := godotenv.Load(); err != nil {
-		log.Printf("load .env: %v", err)
+		log.Printf("Не удалось загрузить файл .env; переменные окружения процесса остаются доступны: %v", err)
 	}
 }
 
 func DB() string {
 	DbUrl := os.Getenv("DB_URL")
 	if DbUrl == "" {
-		log.Println("DB_URL env variable not set")
+		log.Println("Переменная окружения DB_URL отсутствует или пуста")
 	}
 	return DbUrl
 }

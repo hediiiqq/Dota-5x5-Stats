@@ -170,7 +170,7 @@ type ErrorResponse struct {
 
 func (m Match) Validate() error {
 	if len(m.Players) != 10 {
-		return fmt.Errorf("need 10 players, got %d", len(m.Players))
+		return fmt.Errorf("в матче должно быть 10 игроков, получено %d", len(m.Players))
 	}
 	return nil
 }
@@ -178,16 +178,16 @@ func (m Match) Validate() error {
 func main() {
 	data, err := os.ReadFile("testdata/match.json")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Не удалось прочитать пример матча из testdata/match.json: %v", err)
 	}
 
 	var response GCResponse
 	err = json.Unmarshal(data, &response)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Не удалось разобрать JSON примера матча из testdata/match.json: %v", err)
 	}
 	if response.Match == nil {
-		log.Fatal("response contains no match")
+		log.Fatal("В примере ответа координатора отсутствует объект матча")
 	}
 
 	match := Match{
@@ -319,7 +319,7 @@ func main() {
 	}
 
 	if err := match.Validate(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("Пример матча не прошёл проверку: %v", err)
 	}
 	matches := []Match{match}
 
@@ -338,7 +338,7 @@ func main() {
 			errorResponse := ErrorResponse{Error: apiError}
 			err := json.NewEncoder(w).Encode(errorResponse)
 			if err != nil {
-				log.Printf("Error encoding json: %v", err)
+				log.Printf("Не удалось записать JSON-ответ о некорректном ID матча: %v", err)
 				return
 			}
 			return
@@ -355,7 +355,7 @@ func main() {
 			errorResponse := ErrorResponse{Error: apiError}
 			err := json.NewEncoder(w).Encode(errorResponse)
 			if err != nil {
-				log.Printf("Error encoding json: %v", err)
+				log.Printf("Не удалось записать JSON-ответ об отсутствии матча с внутренним ID %d: %v", id, err)
 				return
 			}
 			return
@@ -364,7 +364,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(match)
 		if err != nil {
-			log.Printf("encode match: %v", err)
+			log.Printf("Не удалось записать JSON-ответ с матчем с внутренним ID %d: %v", match.ID, err)
 			return
 		}
 	})
@@ -373,7 +373,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		err := json.NewEncoder(w).Encode(matches)
 		if err != nil {
-			log.Printf("encode matches: %v", err)
+			log.Printf("Не удалось записать JSON-ответ со списком матчей: %v", err)
 			return
 		}
 	})
@@ -385,6 +385,6 @@ func main() {
 
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("HTTP-сервер примера матча завершился с ошибкой: %v", err)
 	}
 }
