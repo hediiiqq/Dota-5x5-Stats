@@ -19,14 +19,19 @@ import (
 	"dota-stats/internal/config"
 )
 
-type Matchs struct {
-	Matches []*protocol.CMsgDOTAMatch
-	err     error
+type AccountResult struct {
+	Matches       []*protocol.CMsgDOTAMatch
+	AccountId     uint64
+	LatestMatchId uint64
+	HasError      bool
+	err           error
 }
 
-func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatchID uint64, checkMatch func(ctx context.Context, uint65 uint64) (bool, error)) ([]*protocol.CMsgDOTAMatch, error) {
+func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatchID uint64, fullHistory bool,
+	checkMatch func(ctx context.Context, uint65 uint64) (bool, error),
+	loadSyncState func(ctx context.Context, id uint64) (uint64, bool, error)) (AccountResult, error) {
 
-	historyResult := make(chan Matchs, 1)
+	historyResult := make(chan AccountResult, 1)
 
 	accountCtx, accountCancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer accountCancel()
@@ -63,7 +68,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 
 	if _, err := client.ConnectContext(accountCtx); err != nil {
 		log.Printf("Аккаунт %s: не удалось установить соединение со Steam: %v", account.Name, err)
-		return nil, err
+		return AccountResult{}, err
 	}
 
 	helloTicker := time.NewTicker(5 * time.Second)
@@ -87,7 +92,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 						token, err := client.Auth.Authenticate(authCtx, steamLoginInfo)
 						if err != nil {
 							log.Printf("Аккаунт %s: не удалось пройти аутентификацию Steam: %v", account.Name, err)
-							historyResult <- Matchs{err: err}
+							historyResult <- AccountResult{err: err}
 							return
 						}
 						steamLoginInfo.AccessToken = token
@@ -101,7 +106,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 
 					if err := client.Auth.LogOn(authCtx, steamLoginInfo); err != nil {
 						log.Printf("Аккаунт %s: не удалось выполнить вход в Steam: %v", account.Name, err)
-						historyResult <- Matchs{err: err}
+						historyResult <- AccountResult{err: err}
 						return
 					}
 				}()
@@ -114,13 +119,13 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 					log.Printf("Аккаунт %s: отправлено приветствие координатору Dota 2", account.Name)
 				} else {
 					log.Printf("Аккаунт %s: Steam отклонил вход; результат=%v", account.Name, event.Result)
-					return nil, fmt.Errorf("аккаунт %s: Steam отклонил вход; результат=%v", account.Name, event.Result)
+					return AccountResult{}, fmt.Errorf("аккаунт %s: Steam отклонил вход; результат=%v", account.Name, event.Result)
 
 				}
 			case *steam.LogOnFailedEvent:
 				log.Printf("Аккаунт %s: вход в Steam завершился ошибкой; результат=%v, состояние сессии аутентификации=%v, причина=%v", account.Name, event.Result, event.AuthSessionState, event.Err)
 				accountCancel()
-				return nil, fmt.Errorf(
+				return AccountResult{}, fmt.Errorf(
 					"вход в Steam завершился ошибкой: результат=%v, причина=%v, аккаунт=%s",
 					event.Result,
 					event.Err,
@@ -128,7 +133,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 				)
 			case *steam.DisconnectedEvent:
 				log.Printf("Аккаунт %s: соединение со Steam закрыто", account.Name)
-				return nil, fmt.Errorf(
+				return AccountResult{}, fmt.Errorf(
 					"аккаунт %s: соединение со Steam закрыто до завершения загрузки матчей",
 					account.Name,
 				)
@@ -138,17 +143,39 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 				} else {
 					accountId := client.SteamId().GetAccountId()
 					go func() {
-						matchIDs, err := HistoryDota(accountCtx, dota, &accountId, minAllowedMatchID)
+						lastMatchId, found, err := loadSyncState(accountCtx, uint64(accountId))
+
+						historyMinID := minAllowedMatchID
 						if err != nil {
-							log.Printf("Аккаунт %s: не удалось получить историю матчей Dota 2: %v", account.Name, err)
-							historyResult <- Matchs{err: err}
+							log.Printf("ошибка на аккаунте %v: %v", account.Name, err)
+							historyResult <- AccountResult{err: err}
 							return
 						}
+						if !found {
+							log.Printf("Последний матч не найден в бд на аккаунте %v", account.Name)
+
+						}
+						if found && !fullHistory {
+							historyMinID = lastMatchId
+							log.Printf("Аккаунт: %v,Id: %v ,загрузка истории до нижней границы %v , источник границы - бд", account.Name, accountId, historyMinID)
+						} else {
+							log.Printf("Аккаунт: %v,Id: %v ,загрузка истории до нижней границы %v , источник границы - флаг", account.Name, accountId, historyMinID)
+						}
+
+						matchIDs, latestMatchId, complete, err := HistoryDota(accountCtx, dota, &accountId, historyMinID)
+						if err != nil {
+							log.Printf("Аккаунт %s: не удалось получить историю матчей Dota 2: %v", account.Name, err)
+							historyResult <- AccountResult{err: err}
+							return
+						}
+
+						hasErrors := !complete
 
 						for _, matchID := range matchIDs {
 							check, err := checkMatch(accountCtx, matchID)
 							if err != nil {
 								log.Printf("Аккаунт %s: матч Dota %d пропущен — не удалось проверить наличие в базе: %v", account.Name, matchID, err)
+								hasErrors = true
 								continue
 							}
 							if check == true {
@@ -158,13 +185,14 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 							match, err := MatchDetails(accountCtx, dota, matchID)
 							if err != nil {
 								log.Printf("Аккаунт %s: не удалось получить подробности матча Dota %d: %v", account.Name, matchID, err)
+								hasErrors = true
 								continue
 							}
 							matches = append(matches, match)
 							log.Printf("Аккаунт %s: получены подробности матча Dota %d; запись в базу ещё не выполнена", account.Name, match.GetMatchId())
 
 						}
-						historyResult <- Matchs{Matches: matches, err: err}
+						historyResult <- AccountResult{Matches: matches, err: err, AccountId: uint64(accountId), LatestMatchId: latestMatchId, HasError: hasErrors}
 					}()
 					gcReady = true
 					helloTicker.Stop()
@@ -177,7 +205,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 				if event.PlayingBlocked == true {
 					log.Printf("Аккаунт %s: загрузка матчей прервана — игровая сессия занята; ID приложения=%v", account.Name, event.PlayingApp)
 					accountCancel()
-					return nil, fmt.Errorf(
+					return AccountResult{}, fmt.Errorf(
 						"аккаунт %s: игровая сессия занята",
 						account.Name,
 					)
@@ -185,14 +213,14 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 
 			case error:
 				log.Printf("Аккаунт %s: получено событие ошибки Steam: %v", account.Name, event)
-				return nil, event
+				return AccountResult{}, event
 
 			}
 		case result := <-historyResult:
-			return result.Matches, result.err
+			return result, result.err
 		case <-accountCtx.Done():
 			log.Printf("Аккаунт %s: работа остановлена контекстом: %v", account.Name, accountCtx.Err())
-			return nil, accountCtx.Err()
+			return AccountResult{}, accountCtx.Err()
 		case <-helloTicker.C:
 			if loggedIn && !gcReady {
 				dota.SayHello()

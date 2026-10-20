@@ -16,9 +16,13 @@ import (
 
 func main() {
 
-	minMatchId := flag.Uint64("min-match-id", 9000000000, "Нижняя граница ID матчей для загрузки истории")
+	minMatchId := flag.Uint64("min-match-id", 6000000000, "Нижняя граница ID матчей для загрузки истории")
+
+	fullHistory := flag.Bool("full-history", false, "Загрузить историю до min-match-id, игнорируя сохранённую границу")
 
 	flag.Parse()
+
+	log.Printf("Режим поиска матчей  %v", *fullHistory)
 
 	dbString := config.DB()
 	ctxDb, cancelDb := context.WithTimeout(context.Background(), 5*time.Second)
@@ -36,8 +40,10 @@ func main() {
 	accounts := config.Load()
 	wg := &sync.WaitGroup{}
 
-	historyResult := make(chan []*protocol.CMsgDOTAMatch, len(accounts))
+	historyResult := make(chan coordinator.AccountResult, len(accounts))
 	var allMatches []*protocol.CMsgDOTAMatch
+
+	var accountResults []coordinator.AccountResult
 
 	seen := make(map[uint64]bool)
 
@@ -51,6 +57,17 @@ func main() {
 		return dbCheck, err
 	}
 
+	loadSyncState := func(ctx context.Context, accountId uint64) (uint64, bool, error) {
+		ctxLO, cancelLO := context.WithTimeout(ctx, 5*time.Second)
+		defer cancelLO()
+
+		dbCheck, found, err := postgres.GetSyncState(ctxLO, db, int64(accountId))
+		if err != nil {
+			log.Printf("Не удалось получить последний сохраненный матч: %v", err)
+		}
+		return dbCheck, found, err
+	}
+
 	log.Printf("min match id: %v", *minMatchId)
 
 	for _, account := range accounts {
@@ -58,21 +75,24 @@ func main() {
 		go func() {
 			defer wg.Done()
 
-			matchIDs, err := coordinator.RunAccount(ctx, account, *minMatchId, checkMatch)
+			result, err := coordinator.RunAccount(ctx, account, *minMatchId, *fullHistory, checkMatch, loadSyncState)
 
 			if err != nil {
 				log.Printf("Аккаунт %s: загрузка матчей прервана: %v", account.Name, err)
 				return
 			}
-			historyResult <- matchIDs
-			log.Printf("Аккаунт %s: получено подробных данных матчей — %d", account.Name, len(matchIDs))
+			historyResult <- result
+			log.Printf("Аккаунт %s: получено подробных данных матчей — %d", account.Name, len(result.Matches))
 		}()
 	}
 	wg.Wait()
 	close(historyResult)
 
-	for matches := range historyResult {
-		for _, match := range matches {
+	savefailed := false
+
+	for result := range historyResult {
+		accountResults = append(accountResults, result)
+		for _, match := range result.Matches {
 			matchID := match.GetMatchId()
 			if !seen[matchID] {
 				seen[matchID] = true
@@ -86,41 +106,49 @@ func main() {
 
 		if match == nil {
 			log.Print("Импорт пропущен: объект матча отсутствует")
+			savefailed = true
 			continue
 		}
 
 		if match.MatchId == nil {
 			log.Print("Импорт пропущен: в данных матча отсутствует ID Dota")
+			savefailed = true
 			continue
 		}
 
 		if match.Starttime == nil {
 			log.Printf("Матч Dota %d пропущен: отсутствует время начала", match.GetMatchId())
+			savefailed = true
 			continue
 		}
 
 		if match.Duration == nil {
 			log.Printf("Матч Dota %d пропущен: отсутствует длительность", match.GetMatchId())
+			savefailed = true
 			continue
 		}
 
 		if match.GameMode == nil {
 			log.Printf("Матч Dota %d пропущен: отсутствует режим игры", match.GetMatchId())
+			savefailed = true
 			continue
 		}
 
 		if match.LobbyType == nil {
 			log.Printf("Матч Dota %d пропущен: отсутствует тип лобби", match.GetMatchId())
+			savefailed = true
 			continue
 		}
 
 		if match.GetMatchId() == 0 {
 			log.Print("Импорт пропущен: ID матча Dota равен нулю")
+			savefailed = true
 			continue
 		}
 
 		if len(match.GetPlayers()) != 10 {
 			log.Printf("Матч Dota %d пропущен: ожидалось 10 игроков, получено %d", match.GetMatchId(), len(match.GetPlayers()))
+			savefailed = true
 			continue
 		}
 
@@ -133,36 +161,42 @@ func main() {
 			if player == nil {
 				log.Printf("Матч Dota %d: в списке игроков обнаружен отсутствующий объект", match.GetMatchId())
 				invalidPlayers = true
+				savefailed = true
 				break
 			}
 
 			if player.AccountId == nil {
 				log.Printf("Матч Dota %d: у игрока %q отсутствует ID аккаунта", match.GetMatchId(), player.GetPlayerName())
 				invalidPlayers = true
+				savefailed = true
 				break
 			}
 
 			if player.GetAccountId() == 0 {
 				log.Printf("Матч Dota %d: у игрока %q ID аккаунта равен нулю", match.GetMatchId(), player.GetPlayerName())
 				invalidPlayers = true
+				savefailed = true
 				break
 			}
 
 			if player.TeamNumber == nil {
 				log.Printf("Матч Dota %d: у игрока с ID аккаунта %d отсутствует номер стороны", match.GetMatchId(), player.GetAccountId())
 				invalidPlayers = true
+				savefailed = true
 				break
 			}
 
 			if *player.TeamNumber != 0 && *player.TeamNumber != 1 {
 				log.Printf("Матч Dota %d: у игрока с ID аккаунта %d неверный номер стороны %d; допустимы 0 и 1", match.GetMatchId(), player.GetAccountId(), player.GetTeamNumber())
 				invalidPlayers = true
+				savefailed = true
 				break
 			}
 
 			if accId[player.GetAccountId()] {
 				log.Printf("Матч Dota %d: ID аккаунта %d повторяется в составе игроков", match.GetMatchId(), player.GetAccountId())
 				invalidPlayers = true
+				savefailed = true
 				break
 			}
 			accId[player.GetAccountId()] = true
@@ -178,6 +212,7 @@ func main() {
 
 		if err != nil {
 			log.Printf("Матч Dota %d пропущен: не удалось преобразовать данные в JSON: %v", match.GetMatchId(), err)
+			savefailed = true
 			continue
 		}
 
@@ -187,6 +222,7 @@ func main() {
 
 		if err != nil {
 			log.Printf("Матч Dota %d пропущен: не удалось проверить наличие в базе: %v", match.GetMatchId(), err)
+			savefailed = true
 			cancelS()
 			continue
 		}
@@ -198,6 +234,7 @@ func main() {
 		tx, err := db.Begin(ctxS)
 		if err != nil {
 			log.Printf("Матч Dota %d: не удалось начать транзакцию сохранения: %v", match.GetMatchId(), err)
+			savefailed = true
 			cancelS()
 			continue
 		}
@@ -207,6 +244,7 @@ func main() {
 		if err != nil {
 			log.Printf("Матч Dota %d: ошибка записи матча; транзакция не подтверждена: %v", match.GetMatchId(), err)
 			tx.Rollback(ctxS)
+			savefailed = true
 			cancelS()
 			continue
 		}
@@ -221,6 +259,7 @@ func main() {
 		if err != nil {
 			log.Printf("Матч Dota %d: ошибка записи игроков; транзакция не подтверждена: %v", match.GetMatchId(), err)
 			tx.Rollback(ctxS)
+			savefailed = true
 			cancelS()
 			continue
 		}
@@ -228,10 +267,37 @@ func main() {
 		if err != nil {
 			log.Printf("Матч Dota %d: подтверждение транзакции завершилось ошибкой: %v", match.GetMatchId(), err)
 			tx.Rollback(ctxS)
+			savefailed = true
 			cancelS()
 			continue
 		}
 		log.Printf("Матч сохранён: ID Dota=%d, внутренний ID=%d, игроков=%d", match.GetMatchId(), internalID, len(match.Players))
 		cancelS()
+	}
+
+	if savefailed {
+		log.Println("Прогресс синхронизации не обновлён: часть матчей не удалось обработать")
+		return
+	}
+
+	for _, result := range accountResults {
+		if result.HasError {
+			log.Println("Прогресс аккаунта не обновлен из-за не полной загрузки матчей")
+			continue
+		}
+		if result.AccountId == 0 || result.LatestMatchId == 0 {
+			log.Println("Прогресс аккаунта не обновлен из-за пустого аккаунт айди или последнего айди матча")
+			continue
+		}
+		ctxS, cancelS := context.WithTimeout(ctx, 5*time.Second)
+
+		err = postgres.SaveSyncState(ctxS, db, int64(result.AccountId), result.LatestMatchId)
+		cancelS()
+
+		if err != nil {
+			log.Printf("Ошибка сохранения последнего результата для аккаунта: %v, ошибка: %v", result.AccountId, err)
+			continue
+		}
+		log.Printf("Прогресс синхронизации сохранён: ID аккаунта= %v, последний проверенный ID матча=%v", result.AccountId, result.LatestMatchId)
 	}
 }

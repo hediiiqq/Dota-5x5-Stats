@@ -10,9 +10,13 @@ import (
 	"github.com/paralin/go-dota2/protocol"
 )
 
-func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minAllowedMatchID uint64) ([]uint64, error) {
+func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minAllowedMatchID uint64) ([]uint64, uint64, bool, error) {
 
 	var startAtMatchID uint64
+
+	var latestMatchID uint64
+
+	var complete bool = false
 
 	var ReqMatches uint32 = 20
 	var PracticeMatches bool = true
@@ -32,7 +36,7 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, 0, complete, ctx.Err()
 		case <-time.After(delay):
 		}
 		log.Printf("Аккаунт с ID %d: запрос страницы истории; курсор=%d, попытка получить непустую страницу=%d из 3", *accountID, startAtMatchID, emptyAttempts+1)
@@ -40,7 +44,7 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 		answer, err := dota.GetPlayerMatchHistory(ctx, &request)
 		if err != nil {
 			log.Printf("Аккаунт с ID %d: не удалось получить страницу истории с курсором %d: %v", *accountID, startAtMatchID, err)
-			return nil, err
+			return nil, 0, complete, err
 		}
 		log.Printf("Аккаунт с ID %d: получена страница истории; курсор=%d, время запроса=%s, записей до фильтрации=%d", *accountID, startAtMatchID, time.Since(started).Round(time.Millisecond), len(answer.Matches))
 		if len(answer.Matches) == 0 {
@@ -73,6 +77,9 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 			if minMatchID == 0 || match.GetMatchId() < minMatchID {
 
 				minMatchID = match.GetMatchId()
+			}
+			if match.GetMatchId() > latestMatchID {
+				latestMatchID = match.GetMatchId()
 			}
 
 		}
@@ -119,6 +126,7 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 		}
 		if minMatchID <= minAllowedMatchID {
 			log.Printf("Аккаунт с ID %d: загрузка истории остановлена — достигнута нижняя граница %d; минимальный ID матча на странице=%d", *accountID, minAllowedMatchID, minMatchID)
+			complete = true
 			break
 		}
 		if startAtMatchID != 0 && minMatchID >= startAtMatchID {
@@ -130,7 +138,7 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 		}
 	}
 
-	return matchIDs, nil
+	return matchIDs, latestMatchID, complete, nil
 }
 
 func MatchDetails(ctx context.Context, dota *dota2.Dota2, matchID uint64) (*protocol.CMsgDOTAMatch, error) {
