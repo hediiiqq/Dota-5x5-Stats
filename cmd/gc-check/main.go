@@ -147,7 +147,6 @@ func main() {
 
 		if len(match.GetPlayers()) != 10 {
 			log.Printf("Матч Dota %d пропущен: ожидалось 10 игроков, получено %d", match.GetMatchId(), len(match.GetPlayers()))
-			savefailed = true
 			continue
 		}
 
