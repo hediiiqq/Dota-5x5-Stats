@@ -52,16 +52,16 @@ func CheckMatch(ctx context.Context, db *pgxpool.Pool, matchId uint64) (bool, er
 	return exists, nil
 }
 
-func GetMatch(ctx context.Context, db *pgxpool.Pool, matchId uint64) (int, []byte, error) {
+func GetMatch(ctx context.Context, db *pgxpool.Pool, matchId int64) (int, []byte, error) {
 
 	var data []byte
 	var id int
 
 	err := db.QueryRow(ctx, `
-	SELECT id, raw_data FROM public.matches WHERE dota_match_id = $1
+	SELECT id, raw_data FROM public.matches WHERE id = $1
 `, matchId).Scan(&id, &data)
 	if err != nil {
-		log.Printf("PostgreSQL: запрос матча по ID Dota %d не вернул данные: %v", matchId, err)
+		log.Printf("PostgreSQL: запрос матча по внутреннему ID %d не вернул данные: %v", matchId, err)
 		return 0, nil, err
 	}
 	return id, data, nil

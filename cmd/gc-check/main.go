@@ -5,7 +5,6 @@ import (
 	"dota-stats/internal/config"
 	"dota-stats/internal/repository/postgres"
 	"dota-stats/internal/source/coordinator"
-	"encoding/json"
 	"flag"
 	"log"
 	"sync"
@@ -208,71 +207,18 @@ func main() {
 			continue
 		}
 
-		matchData, err := json.Marshal(match)
-
-		if err != nil {
-			log.Printf("Матч Dota %d пропущен: не удалось преобразовать данные в JSON: %v", match.GetMatchId(), err)
+		_, inserted, err1 := postgres.SaveMatchWithPlayers(ctx, db, match)
+		if err1 != nil {
+			log.Printf("Ошибка сохранения матча:%v , статус: %v, ошибка: %v", match.GetMatchId(), inserted, err1)
 			savefailed = true
 			continue
 		}
 
-		ctxS, cancelS := context.WithTimeout(ctx, 5*time.Second)
-
-		checkMatch, err := postgres.CheckMatch(ctxS, db, match.GetMatchId())
-
-		if err != nil {
-			log.Printf("Матч Dota %d пропущен: не удалось проверить наличие в базе: %v", match.GetMatchId(), err)
-			savefailed = true
-			cancelS()
-			continue
-		}
-		if checkMatch == true {
-			log.Printf("Матч Dota %d уже сохранён в базе; повторный импорт пропущен", match.GetMatchId())
-			cancelS()
-			continue
-		}
-		tx, err := db.Begin(ctxS)
-		if err != nil {
-			log.Printf("Матч Dota %d: не удалось начать транзакцию сохранения: %v", match.GetMatchId(), err)
-			savefailed = true
-			cancelS()
-			continue
-		}
-
-		internalID, inserted, err := postgres.SaveMatch(ctxS, tx, *match.MatchId, time.Unix(int64(match.GetStarttime()), 0), *match.Duration, *match.GameMode, *match.LobbyType, matchData)
-
-		if err != nil {
-			log.Printf("Матч Dota %d: ошибка записи матча; транзакция не подтверждена: %v", match.GetMatchId(), err)
-			tx.Rollback(ctxS)
-			savefailed = true
-			cancelS()
-			continue
-		}
 		if !inserted {
-			log.Printf("Матч Dota %d уже существует на момент вставки; повторная запись игроков пропущена", match.GetMatchId())
-			tx.Rollback(ctxS)
-			cancelS()
+			log.Printf("Матч уже существует id:%v, пропуск", match.GetMatchId())
 			continue
 		}
 
-		err = postgres.SaveMatchPlayers(ctxS, tx, internalID, match.Players)
-		if err != nil {
-			log.Printf("Матч Dota %d: ошибка записи игроков; транзакция не подтверждена: %v", match.GetMatchId(), err)
-			tx.Rollback(ctxS)
-			savefailed = true
-			cancelS()
-			continue
-		}
-		err = tx.Commit(ctxS)
-		if err != nil {
-			log.Printf("Матч Dota %d: подтверждение транзакции завершилось ошибкой: %v", match.GetMatchId(), err)
-			tx.Rollback(ctxS)
-			savefailed = true
-			cancelS()
-			continue
-		}
-		log.Printf("Матч сохранён: ID Dota=%d, внутренний ID=%d, игроков=%d", match.GetMatchId(), internalID, len(match.Players))
-		cancelS()
 	}
 
 	if savefailed {

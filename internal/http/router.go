@@ -11,9 +11,9 @@ func NewRouter(db *pgxpool.Pool) *http.ServeMux {
 	mux := http.NewServeMux()
 	handler := handlers.MatchHandler{DB: db}
 
-	mux.HandleFunc("GET /matches/{id}", handler.GetMatch)
+	mux.HandleFunc("GET /api/matches/{id}", handler.GetMatch)
 
-	mux.HandleFunc("GET /matches", handler.ListMatches)
+	mux.HandleFunc("GET /api/matches", handler.ListMatches)
 
 	return mux
 
