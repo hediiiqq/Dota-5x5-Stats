@@ -7,6 +7,8 @@ type MatchResponse struct {
 	DotaMatchID        *string       `json:"dota_match_id"`
 	StartedAt          *time.Time    `json:"started_at"`
 	Duration           *int          `json:"duration"`
+	GameMode           *int          `json:"game_mode"`
+	GameModeName       *string       `json:"game_mode_name"`
 	Winner             *string       `json:"winner"`
 	Players            []MatchPlayer `json:"players"`
 	FirstBloodTime     *int          `json:"first_blood_time"`
@@ -24,6 +26,8 @@ type MatchPlayer struct {
 	Nickname           *string           `json:"nickname"`
 	AccountID          *string           `json:"account_id"`
 	Hero               *int              `json:"hero_id"`
+	HeroName           *string           `json:"hero_name"`
+	HeroIconURL        *string           `json:"hero_icon_url"`
 	Kills              *int              `json:"kills"`
 	Deaths             *int              `json:"deaths"`
 	Assists            *int              `json:"assists"`
@@ -84,7 +88,9 @@ type DamageBreakdown struct {
 }
 
 type PickBan struct {
-	IsPick *bool `json:"is_pick"`
-	Team   *int  `json:"team"`
-	HeroId *int  `json:"hero_id"`
+	IsPick      *bool   `json:"is_pick"`
+	Team        *int    `json:"team"`
+	HeroId      *int    `json:"hero_id"`
+	HeroName    *string `json:"hero_name"`
+	HeroIconURL *string `json:"hero_icon_url"`
 }

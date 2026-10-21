@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>История матчей · Dota Stats</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script type="module" src="/assets/history.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">К содержимому</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Dota Stats — история матчей"><span class="brand-mark" aria-hidden="true">D</span><span>DOTA<span class="brand-light"> STATS</span></span></a>
+    <nav aria-label="Главная навигация"><a class="nav-link active" href="/" aria-current="page">История матчей</a></nav>
+    <span class="header-note">МАТЧИ ВАШЕЙ ГРУППЫ</span>
+  </header>
+  <main id="main" class="container">
+    <section class="page-heading">
+      <div><p class="eyebrow">АРХИВ ИГР</p><h1>История матчей<span class="heading-dot">.</span></h1><p class="subtitle">Каждая игра — часть вашей истории.</p></div>
+      <div class="source-label"><span class="source-dot" aria-hidden="true"></span>Сохранённые матчи</div>
+    </section>
+    <section class="panel" aria-labelledby="history-title" id="history-panel">
+      <div class="panel-heading"><h2 id="history-title">Последние игры</h2><span id="match-count" class="muted"></span></div>
+      <div id="status" class="status" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><p>Загружаем историю…</p></div>
+      <div id="history-content" hidden>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="История матчей, таблица с горизонтальной прокруткой">
+          <table class="history-table"><caption class="sr-only">Сохранённые матчи. Время местное.</caption><thead><tr><th scope="col">Дата и время</th><th scope="col">Dota ID</th><th scope="col">Победитель</th><th scope="col">Длительность</th><th scope="col"><span class="sr-only">Подробности</span></th></tr></thead><tbody id="matches"></tbody></table>
+        </div>
+      </div>
+      <div class="panel-footer"><span class="muted small">Время местное · По 20 матчей на странице</span><nav class="pagination" aria-label="Страницы истории"><a id="previous" class="button button-quiet" aria-disabled="true">← Назад</a><span id="page-number" class="page-number"></span><a id="next" class="button button-quiet" aria-disabled="true">Далее →</a></nav></div>
+    </section>
+    <p class="page-note">История из вашей базы. Просмотр доступен без подключения к Steam.</p>
+    <noscript><p class="notice">Для просмотра матчей включите JavaScript в браузере.</p></noscript>
+  </main>
+  <footer class="site-footer container"><span>DOTA STATS</span><span>Ваши игры. Ваша статистика.</span></footer>
+</body>
+</html>

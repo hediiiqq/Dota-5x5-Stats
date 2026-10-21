@@ -9,10 +9,12 @@ import (
 func ToMatchResponse(id int, source coordinator.GCMatch) MatchResponse {
 
 	match := MatchResponse{
-		ID:        id,
-		Duration:  source.Duration,
-		Players:   make([]MatchPlayer, 0, len(source.Players)),
-		PicksBans: make([]PickBan, 0, len(source.PicksBans)),
+		ID:           id,
+		Duration:     source.Duration,
+		GameMode:     source.GameMode,
+		GameModeName: gameModeName(source.GameMode),
+		Players:      make([]MatchPlayer, 0, len(source.Players)),
+		PicksBans:    make([]PickBan, 0, len(source.PicksBans)),
 	}
 
 	if source.MatchID != nil {
@@ -69,9 +71,11 @@ func ToMatchResponse(id int, source coordinator.GCMatch) MatchResponse {
 	for _, pickBan := range source.PicksBans {
 
 		match.PicksBans = append(match.PicksBans, PickBan{
-			IsPick: pickBan.IsPick,
-			Team:   pickBan.Team,
-			HeroId: pickBan.Hero,
+			IsPick:      pickBan.IsPick,
+			Team:        pickBan.Team,
+			HeroId:      pickBan.Hero,
+			HeroName:    heroName(pickBan.Hero),
+			HeroIconURL: heroIconURL(pickBan.Hero),
 		})
 	}
 
@@ -140,6 +144,8 @@ func ToMatchResponse(id int, source coordinator.GCMatch) MatchResponse {
 			Nickname:           player.PlayerName,
 			AccountID:          accountID,
 			Hero:               player.HeroID,
+			HeroName:           heroName(player.HeroID),
+			HeroIconURL:        heroIconURL(player.HeroID),
 			Kills:              player.Kills,
 			Deaths:             player.Deaths,
 			Assists:            player.Assists,

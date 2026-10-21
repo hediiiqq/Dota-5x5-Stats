@@ -4,6 +4,7 @@ type GCMatch struct {
 	MatchID            *uint64     `json:"matchId"`
 	StartTime          *int64      `json:"starttime"`
 	Duration           *int        `json:"duration"`
+	GameMode           *int        `json:"gameMode"`
 	MatchOutcome       *int        `json:"matchOutcome"`
 	Players            []GCPlayer  `json:"players"`
 	FirstBloodTime     *int        `json:"firstBloodTime"`

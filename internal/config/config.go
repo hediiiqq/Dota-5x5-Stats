@@ -29,6 +29,10 @@ func DB() string {
 	return DbUrl
 }
 
+func SteamWebAPIKey() string {
+	return os.Getenv("STEAM_WEB_API_KEY")
+}
+
 func Load() []SteamAccount {
 	account1 := SteamAccount{
 		Name:  "whymiutu",

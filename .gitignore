@@ -1,0 +1,39 @@
+/ACCOUNT2_TOKEN.txt
+/ACCOUNT1_TOKEN.txt
+/.env
+/docs/api-match.example.json
+/.local/
+
+# Local configuration and credentials
+.env.*
+!.env.example
+*_TOKEN.txt
+
+# IDE settings
+/.idea/
+/.vscode/
+*.iml
+
+# Go build and test artifacts
+/bin/
+/build/
+/dist/
+/dota-stats
+*.exe
+*.exe~
+*.test
+*.prof
+/coverage.out
+/coverage.html
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

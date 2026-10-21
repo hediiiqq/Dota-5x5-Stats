@@ -63,6 +63,9 @@
 | `dota_match_id` | string или null | `match.matchId`; в примере `"9034163193"` |
 | `started_at` | string или null | `match.starttime`, преобразованный из Unix-времени в секундах в UTC |
 | `duration` | integer или null | `match.duration`; в примере `1998` секунд, то есть 33:18 |
+| `game_mode` | integer или null | Исходный `gameMode`; код режима игры. Доступно в `cmd/server` |
+| `game_mode_name` | string или null | Название известного режима по константам GC, например `Captains Mode` (2), `Captains Draft` (16), `Turbo` (23); неизвестный или отсутствующий код даёт `null`. Доступно в `cmd/server` |
+| `picks_bans` | array | Записи `picksBans` в исходном порядке: `is_pick` (boolean или null), `team` (integer или null; 0 — Radiant, 1 — Dire), `hero_id` (integer или null), `hero_name` и `hero_icon_url` (string или null). Неизвестный герой сохраняет ID; отсутствующие записи возвращаются как `[]`. Доступно в `cmd/server` |
 | `winner` | string или null | `"radiant"`, `"dire"` либо `null`; преобразование `matchOutcome` нужно подтвердить по protobuf-схеме |
 | `players` | array of MatchPlayer | `match.players`; в предоставленном примере десять игроков |
 
@@ -80,6 +83,8 @@
 | `account_id` | string или null | `accountId`; ID аккаунта Dota, не SteamID64 |
 | `side` | string или null | `"radiant"` или `"dire"`; правило преобразования описано ниже |
 | `hero_id` | integer или null | `heroId`; числовой ID героя, не его название |
+| `hero_name` | string или null | Название героя по `hero_id` из локального справочника официального сайта Dota 2; неизвестный или отсутствующий ID даёт `null`. Поле доступно в сервере `cmd/server` |
+| `hero_icon_url` | string или null | URL мини-иконки 32×32 на Steam CDN по внутреннему имени героя; неизвестный или отсутствующий ID даёт `null`. Поле доступно в сервере `cmd/server` |
 | `kills` | integer или null | `kills`; убийства |
 | `deaths` | integer или null | `deaths`; смерти |
 | `assists` | integer или null | `assists`; помощи |

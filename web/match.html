@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Матч · Dota Stats</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/match.css">
+  <script type="module" src="/assets/match.js"></script>
+</head>
+<body class="match-layout">
+  <a class="skip-link" href="#main">К содержимому</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Dota Stats — история матчей"><span class="brand-mark" aria-hidden="true">D</span><span>DOTA<span class="brand-light"> STATS</span></span></a>
+    <nav aria-label="Главная навигация"><a class="nav-link" href="/">История матчей</a></nav>
+    <span class="header-note">МАТЧИ ВАШЕЙ ГРУППЫ</span>
+  </header>
+  <main id="main" class="container match-page">
+    <a id="back" class="back-link" href="/">← К истории матчей</a>
+    <section class="page-heading match-heading"><div><p class="eyebrow">ОБЗОР ИГРЫ</p><h1 id="match-title">Матч<span class="heading-dot">.</span></h1><p class="subtitle" id="match-subtitle">Подробности сохранённой игры</p></div></section>
+    <div id="status" class="status panel" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><p>Загружаем матч…</p></div>
+    <div id="match-content" hidden>
+      <section class="match-summary" aria-label="Общая информация о матче">
+        <div class="stat-card"><span class="stat-label">Победитель</span><div id="winner" class="stat-value"></div></div>
+        <div class="stat-card"><span class="stat-label">Длительность</span><div id="duration" class="stat-value mono"></div></div>
+        <div class="stat-card"><span class="stat-label">Режим игры</span><div id="game-mode" class="stat-value stat-mode"></div></div>
+        <div class="stat-card"><span class="stat-label">Дата и время</span><div id="started-at" class="stat-value stat-date"></div><span class="muted small">Время местное</span></div>
+      </section>
+      <div id="teams"></div>
+      <div id="builds"></div>
+      <section class="panel draft-panel" aria-labelledby="draft-title">
+        <div class="panel-heading"><h2 id="draft-title">Пики и баны</h2><span class="muted small">Выбор героев</span></div>
+        <div id="draft"></div>
+      </section>
+      <p class="page-note">Названия героев — из справочника Dota 2. «—» означает, что показатель отсутствует.</p>
+    </div>
+    <noscript><p class="notice">Для просмотра матча включите JavaScript в браузере.</p></noscript>
+  </main>
+  <footer class="site-footer container"><span>DOTA STATS</span><span>Ваши игры. Ваша статистика.</span></footer>
+</body>
+</html>
