@@ -1,6 +1,7 @@
 import { date, duration, winner, offsetFromURL, matchID, image, requestJSON, showStatus, showLoading } from "./common.js";
 import { renderDraft } from "./draft.js";
-import { renderScoreboard, renderBuilds } from "./scoreboard.js";
+import { renderScoreboard, renderOverview, renderResult } from "./scoreboard.js";
+import { favoriteEditor } from "./favorites.js";
 
 const params = new URLSearchParams(location.search);
 const id = matchID(params.get("id"));
@@ -11,6 +12,18 @@ const status = document.querySelector("#status");
 const content = document.querySelector("#match-content");
 let controller;
 let avatarSlots = new Map();
+let selectedView = "cards";
+
+function setView(view) {
+  selectedView = view;
+  document.querySelector("#overview").hidden = view !== "cards";
+  document.querySelector("#teams").hidden = view !== "table";
+  document.querySelector("#view-cards").setAttribute("aria-pressed", String(view === "cards"));
+  document.querySelector("#view-table").setAttribute("aria-pressed", String(view === "table"));
+}
+
+document.querySelector("#view-cards").addEventListener("click", () => setView("cards"));
+document.querySelector("#view-table").addEventListener("click", () => setView("table"));
 
 function render(match) {
   if (!match || typeof match !== "object" || !Array.isArray(match.players)) {
@@ -25,9 +38,12 @@ function render(match) {
   document.querySelector("#duration").textContent = duration(match.duration);
   document.querySelector("#started-at").textContent = date(match.started_at);
   document.querySelector("#game-mode").textContent = match.game_mode_name || (Number.isInteger(match.game_mode) ? `Режим #${match.game_mode}` : "—");
+  document.querySelector("#match-favorite").replaceChildren(favoriteEditor(match.id));
   document.querySelector("#draft").replaceChildren(renderDraft(match.picks_bans));
   document.querySelector("#teams").replaceChildren(renderScoreboard(match, avatarSlots));
-  document.querySelector("#builds").replaceChildren(renderBuilds(match));
+  document.querySelector("#match-result").replaceChildren(renderResult(match));
+  document.querySelector("#overview").replaceChildren(renderOverview(match, avatarSlots));
+  setView(selectedView);
 }
 
 async function loadAvatars(signal) {

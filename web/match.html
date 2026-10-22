@@ -22,15 +22,24 @@
     <section class="page-heading match-heading"><div><p class="eyebrow">ОБЗОР ИГРЫ</p><h1 id="match-title">Матч<span class="heading-dot">.</span></h1><p class="subtitle" id="match-subtitle">Подробности сохранённой игры</p></div></section>
     <div id="status" class="status panel" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><p>Загружаем матч…</p></div>
     <div id="match-content" hidden>
+      <section id="match-result" class="match-result panel" aria-label="Команды и убийства героев"></section>
       <section class="match-summary" aria-label="Общая информация о матче">
         <div class="stat-card"><span class="stat-label">Победитель</span><div id="winner" class="stat-value"></div></div>
         <div class="stat-card"><span class="stat-label">Длительность</span><div id="duration" class="stat-value mono"></div></div>
         <div class="stat-card"><span class="stat-label">Режим игры</span><div id="game-mode" class="stat-value stat-mode"></div></div>
         <div class="stat-card"><span class="stat-label">Дата и время</span><div id="started-at" class="stat-value stat-date"></div><span class="muted small">Время местное</span></div>
       </section>
-      <div id="teams"></div>
-      <div id="builds"></div>
-      <section class="panel draft-panel" aria-labelledby="draft-title">
+      <div class="match-toolbar">
+        <div class="view-switch" role="group" aria-label="Представление игроков">
+          <button id="view-cards" type="button" aria-pressed="true" aria-controls="overview teams">Карточки</button>
+          <button id="view-table" type="button" aria-pressed="false" aria-controls="overview teams">Таблица</button>
+        </div>
+        <a class="draft-jump" href="#draft-section">Пики и баны ↓</a>
+      </div>
+      <div id="match-favorite"></div>
+      <div id="overview"></div>
+      <div id="teams" hidden></div>
+      <section id="draft-section" class="panel draft-panel" aria-labelledby="draft-title">
         <div class="panel-heading"><h2 id="draft-title">Пики и баны</h2><span class="muted small">Выбор героев</span></div>
         <div id="draft"></div>
       </section>

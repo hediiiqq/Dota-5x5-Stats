@@ -17,6 +17,10 @@ type GCMatch struct {
 	DireTeamLogoUrl    *string     `json:"direTeamLogoUrl"`
 }
 
+type GCPlayerHistory struct {
+	AbilityUpgrades []int `json:"abilityUpgrades"`
+}
+
 type GCPlayer struct {
 	PlayerName         *string             `json:"playerName"`
 	AccountID          *uint32             `json:"accountId"`
@@ -66,6 +70,7 @@ type GCPlayer struct {
 	PermanentBuffs     []GCPermanentBuff   `json:"permanentBuffs"`
 	HeroDamageReceived []GCDamageBreakdown `json:"heroDamageReceived"`
 	HeroDamageDealt    []GCDamageBreakdown `json:"heroDamageDealt"`
+	StatsHistory       *GCPlayerHistory    `json:"statsHistory"`
 }
 
 type GCPermanentBuff struct {

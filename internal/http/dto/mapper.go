@@ -138,6 +138,11 @@ func ToMatchResponse(id int, source coordinator.GCMatch) MatchResponse {
 				})
 			}
 		}
+		var abilityUpgrades []int
+
+		if player.StatsHistory != nil {
+			abilityUpgrades = player.StatsHistory.AbilityUpgrades
+		}
 
 		match.Players = append(match.Players, MatchPlayer{
 			Side:               side,
@@ -191,6 +196,7 @@ func ToMatchResponse(id int, source coordinator.GCMatch) MatchResponse {
 			PermanentBuffs:     buffs,
 			HeroDamageReceived: received,
 			HeroDamageDealt:    dealt,
+			AbilityUpgrades:    abilityUpgrades,
 		})
 	}
 

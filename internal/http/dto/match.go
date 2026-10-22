@@ -73,6 +73,7 @@ type MatchPlayer struct {
 	PermanentBuffs     []PermanentBuff   `json:"permanent_buffs"`
 	HeroDamageReceived []DamageBreakdown `json:"hero_damage_received"`
 	HeroDamageDealt    []DamageBreakdown `json:"hero_damage_dealt"`
+	AbilityUpgrades    []int             `json:"ability_upgrades"`
 }
 
 type PermanentBuff struct {
