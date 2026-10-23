@@ -1,5 +1,5 @@
-import { element, number, image, steamProfileURL, animateSurface } from "./common.js";
-import { renderInventory, renderAbilityBuild } from "./inventory.js";
+import { element, number, image, steamProfileURL } from "./common.js";
+import { renderInventory, renderAbilityBuild, renderAbilitySequence } from "./inventory.js";
 
 const compactFormatter = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
 const valid = value => typeof value === "number" && Number.isFinite(value);
@@ -118,20 +118,21 @@ function metricCell(value) {
 
 function playerRow(player, maximum, avatarSlots) {
   const row = element("tr", "score-player-row");
-  const hero = element("td", "score-hero"); hero.append(portrait(player));
-  const playerCell = element("th", "score-player"); playerCell.scope = "row"; playerCell.append(identity(player, avatarSlots));
+  const playerCell = element("th", "score-player"); playerCell.scope = "row";
+  const playerHeading = element("div", "score-player-heading");
+  playerHeading.append(portrait(player), identity(player, avatarSlots)); playerCell.append(playerHeading);
   const kda = element("td", "score-kda mono"); kda.append(pair(player.kills, player.deaths, player.assists));
   const farm = element("td", "score-farm mono"); farm.append(pair(player.last_hits, player.denies));
   const economy = element("td", "score-economy mono"); economy.append(pair(player.gold_per_min, player.xp_per_min));
   const inventory = element("td", "score-inventory"); inventory.append(renderInventory(player));
-  row.append(hero, playerCell, metricCell(player.level), kda, worthCell(player.net_worth, maximum), farm, economy,
+  row.append(playerCell, metricCell(player.level), kda, worthCell(player.net_worth, maximum), farm, economy,
     metricCell(player.hero_damage), metricCell(player.tower_damage), metricCell(player.hero_healing), inventory);
   return row;
 }
 
 function totalsRow(match, side, players, maximum) {
   const row = element("tr", `score-total ${side}`);
-  const label = element("th", "score-total-label"); label.scope = "row"; label.colSpan = 2;
+  const label = element("th", "score-total-label"); label.scope = "row";
   label.append(teamHeading(match, side, players, true));
   const kda = element("td", "mono"); kda.append(pair(total(players, "kills"), total(players, "deaths"), total(players, "assists")));
   const farm = element("td", "mono"); farm.append(pair(total(players, "last_hits"), total(players, "denies")));
@@ -161,13 +162,14 @@ export function renderScoreboard(match, avatarSlots) {
   function sortBy(key, label) {
     ascending = sortKey === key ? !ascending : true;
     sortKey = key;
-    for (const { body, rows } of teamRows) {
+    for (const { body, rows, totalRow } of teamRows) {
       const sorted = [...rows].sort((a, b) => {
         const left = a.player[key], right = b.player[key];
         if (!valid(left) || !valid(right)) return valid(left) ? -1 : valid(right) ? 1 : a.index - b.index;
         return (ascending ? left - right : right - left) || a.index - b.index;
       });
       for (const { row } of sorted) body.append(row);
+      body.append(totalRow);
     }
     for (const control of sortControls) control.header.removeAttribute("aria-sort");
     for (const control of sortControls) {
@@ -180,7 +182,7 @@ export function renderScoreboard(match, avatarSlots) {
     sortStatus.textContent = `${label}: по ${ascending ? "возрастанию" : "убыванию"} внутри каждой команды. Нет данных — в конце.`;
   }
   const head = element("thead"); const header = element("tr");
-  for (const [text, full, metrics] of [["Герой", "Герой"], ["Игрок", "Игрок и Steam-профиль"],
+  for (const [text, full, metrics] of [["Игрок", "Герой, игрок и Steam-профиль"],
     ["Ур.", "Уровень героя", [["Ур.", "Уровень героя", "level"]]],
     ["У / С / П", "Убийства / смерти / помощи", [["У", "Убийства", "kills"], ["С", "Смерти", "deaths"], ["П", "Помощи", "assists"]]],
     ["ОЦ", "Общая ценность героя (net worth)", [["ОЦ", "Общая ценность героя", "net_worth"]]],
@@ -210,22 +212,22 @@ export function renderScoreboard(match, avatarSlots) {
   head.append(header); table.append(head);
   const sides = groups(match.players);
   const maximum = Math.max(0, ...match.players.map(player => valid(player.net_worth) ? player.net_worth : 0));
+  const maxTotal = Math.max(0, ...sides.map(([, players]) => total(players, "net_worth") || 0));
   for (const [side, players] of sides) {
     const body = element("tbody", `score-side ${side}`);
-    const divider = element("tr", "score-team-divider"); const label = element("th"); label.colSpan = 11; label.scope = "rowgroup";
+    const divider = element("tr", "score-team-divider"); const label = element("th"); label.colSpan = 10; label.scope = "rowgroup";
     label.append(teamHeading(match, side, players)); divider.append(label); body.append(divider);
     if (!players.length) {
-      const row = element("tr"); const cell = element("td", "score-empty muted", "Нет данных об игроках этой стороны."); cell.colSpan = 11; row.append(cell); body.append(row);
+      const row = element("tr"); const cell = element("td", "score-empty muted", "Нет данных об игроках этой стороны."); cell.colSpan = 10; row.append(cell); body.append(row);
     }
     const rows = players.map((player, index) => ({ player, index, row: playerRow(player, maximum, avatarSlots) }));
     for (const { row } of rows) body.append(row);
-    teamRows.push({ body, rows });
+    const totalRow = totalsRow(match, side, players, maxTotal);
+    body.append(totalRow);
+    teamRows.push({ body, rows, totalRow });
     table.append(body);
   }
-  const foot = element("tfoot");
-  const maxTotal = Math.max(0, ...sides.map(([, players]) => total(players, "net_worth") || 0));
-  for (const [side, players] of sides) foot.append(totalsRow(match, side, players, maxTotal));
-  table.append(foot); scroll.append(table); panel.append(scroll, sortStatus);
+  scroll.append(table); panel.append(scroll, sortStatus);
   panel.append(element("p", "score-legend", "ОЦ — общая ценность · УГ — урон героям · УС — урон строениям · ЛГ — лечение героев. Итоги — суммы по командам."));
   return panel;
 }
@@ -245,37 +247,8 @@ export function renderResult(match) {
   return root;
 }
 
-function detailMetric(label, value) {
-  const root = element("div", "detail-metric");
-  root.append(element("span", "muted small", label), element("strong", "mono", number(value)));
-  return root;
-}
-
 export function renderOverview(match, avatarSlots) {
   const root = element("div", "overview");
-  const detail = element("section", "panel selected-player");
-  detail.id = "selected-player";
-  detail.setAttribute("aria-label", "Подробности выбранного героя");
-  const buttons = [];
-  let firstPlayer;
-  function select(player, button, reveal = false) {
-    for (const item of buttons) item.setAttribute("aria-pressed", String(item === button));
-    const heading = element("div", "panel-heading selected-heading");
-    const title = element("h2", "", player.hero_name || (player.hero_id == null ? "Герой неизвестен" : `Герой #${player.hero_id}`));
-    title.tabIndex = -1;
-    title.append(heroLevel(player));
-    heading.append(portrait(player), title, element("span", "muted small", player.nickname || "Без имени"));
-    const metrics = element("div", "detail-metrics");
-    for (const [label, key] of [["Ценность героя", "net_worth"], ["Урон героям", "hero_damage"], ["Урон строениям", "tower_damage"], ["Лечение", "hero_healing"], ["Золото / мин", "gold_per_min"], ["Опыт / мин", "xp_per_min"]]) metrics.append(detailMetric(label, player[key]));
-    const equipment = element("div", "detail-equipment");
-    equipment.append(element("p", "ability-build-label", "Предметы на конец матча"), renderInventory(player, true));
-    detail.replaceChildren(heading, metrics, equipment);
-    if (reveal) {
-      title.focus({ preventScroll: true });
-      detail.scrollIntoView({ block: "start" });
-      animateSurface(detail);
-    }
-  }
   for (const [side, players] of groups(match.players)) {
     const section = element("section", `overview-team ${side}`);
     section.setAttribute("aria-label", sideName(side));
@@ -285,18 +258,11 @@ export function renderOverview(match, avatarSlots) {
     const grid = element("div", "hero-cards");
     for (const player of players) {
       const card = element("article", "hero-card");
-      const button = element("button", "hero-select");
-      button.type = "button";
-      button.setAttribute("aria-pressed", "false");
-      button.setAttribute("aria-controls", "selected-player");
-      button.setAttribute("aria-label", `Показать сборку: ${player.hero_name || "герой"}, ${player.nickname || "без имени"}`);
+      const heading = element("div", "hero-select roster-hero-heading");
       const heroName = element("span", "card-hero-name", player.hero_name || (player.hero_id == null ? "Герой неизвестен" : `Герой #${player.hero_id}`));
       const heroHeading = element("span", "card-hero-heading");
       heroHeading.append(heroName, heroLevel(player));
-      button.append(portrait(player), heroHeading);
-      buttons.push(button);
-      firstPlayer ??= player;
-      button.addEventListener("click", () => select(player, button, true));
+      heading.append(portrait(player), heroHeading);
       const kda = element("div", "card-kda");
       for (const [label, value] of [["У", player.kills], ["С", player.deaths], ["П", player.assists]]) {
         const metric = element("div", "card-kda-metric");
@@ -305,15 +271,14 @@ export function renderOverview(match, avatarSlots) {
       }
       const worth = element("div", "card-worth");
       worth.append(element("span", "muted small", "Ценность героя"), element("strong", "mono", short(player.net_worth)));
-      card.append(button, identity(player, avatarSlots), kda, worth, renderInventory(player));
+      const loadout = element("div", "card-loadout");
+      loadout.append(renderInventory(player), renderAbilitySequence(player.ability_upgrades, player.hero_id));
+      card.append(heading, identity(player, avatarSlots), kda, worth, loadout);
       grid.append(card);
     }
     if (!players.length) grid.append(element("p", "muted small", "Нет данных об игроках этой стороны."));
     section.append(grid); root.append(section);
   }
-  root.append(element("p", "selection-hint muted small", "Нажмите на героя, чтобы посмотреть его показатели и предметы. История изучения способностей — во вкладке «Прокачка»."), detail);
-  if (firstPlayer) select(firstPlayer, buttons[0]);
-  else detail.append(element("p", "score-empty muted", "Нет данных об игроках."));
   return root;
 }
 

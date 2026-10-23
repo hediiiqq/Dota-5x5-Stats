@@ -1,5 +1,5 @@
 import { element, image, heroBadge, number, requestJSON, showStatus, showLoading, animateSurface } from "./common.js";
-import { itemInfo, itemImageURLs, abilityInfo } from "./items.js";
+import { itemInfo, itemImageURLs, abilityInfo, talentUnlockLevel } from "./items.js";
 
 function itemImage(id, className, size) {
   const [url, ...fallbacks] = itemImageURLs(id);
@@ -170,7 +170,7 @@ export function renderPurchases(match, matchID, signal) {
 export function renderSkillProgression(match) {
   const panel = element("section", "panel skill-progression");
   const heading = element("div", "panel-heading"); heading.append(element("h2", "", "Прокачка способностей"), element("span", "muted small", "Способности и таланты"));
-  panel.append(heading, element("p", "purchase-note muted small", "Номера — события изучения, не уровни героя. Талант и способность могут изучаться на одном уровне; точные уровни в этих данных отсутствуют."));
+  panel.append(heading, element("p", "purchase-note muted small", "Под способностями — отдельный порядок их изучения без талантов, не уровни героя. Под талантами — уровень доступности по дереву героя, а не фактический уровень изучения. Неизвестный уровень обозначен знаком ?. Талант и способность могут изучаться на одном уровне."));
   const scroll = element("div", "skill-progression-scroll"); scroll.tabIndex = 0; scroll.setAttribute("role", "region"); scroll.setAttribute("aria-label", "Прокачка игроков по командам");
   const table = element("table", "skill-progression-table");
   table.append(element("caption", "sr-only", "Способности и таланты игроков в исходном порядке изучения"));
@@ -187,15 +187,19 @@ export function renderSkillProgression(match) {
       label.append(heroBadge(player), element("span", "purchase-nickname", player.nickname || "Анонимный игрок")); row.append(label);
       const abilities = element("div", "skill-lane skill-abilities"), talents = element("div", "skill-lane skill-talents");
       const upgrades = Array.isArray(player.ability_upgrades) ? player.ability_upgrades : [];
+      let abilityStep = 0;
       upgrades.forEach((id, index) => {
         const info = abilityInfo(id), talent = Boolean(info?.[1]?.startsWith("special_bonus_"));
+        if (!talent) abilityStep++;
         const name = info?.[0]?.replace(/\{[^}]+\}/g, "…") || `Способность #${id ?? "?"}`;
         const entry = element("button", `skill-event${talent ? " skill-talent-event" : ""}`); entry.type = "button";
-        entry.title = `Событие ${index + 1}: ${talent ? "Талант · " : ""}${name}`; entry.setAttribute("aria-label", entry.title);
+        const unlock = talent ? talentUnlockLevel(player.hero_id, id, upgrades.slice(0, index)) : null;
+        entry.title = talent ? `${name} · ${unlock == null ? "Уровень доступности неизвестен" : `Доступен с уровня ${unlock}`} · запись ${index + 1}` : `Способность ${abilityStep}: ${name} · запись ${index + 1}`;
+        entry.setAttribute("aria-label", entry.title);
         const frame = element("span", "skill-event-icon", talent ? "Т" : Array.from(name)[0]); frame.setAttribute("aria-hidden", "true");
         const path = talent ? "icons/talents.svg" : info ? `abilities/${info[1]}.png` : null;
         if (path) { const icon = image(`https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/${path}`, "skill-event-image", "", 36); if (icon) frame.append(icon); }
-        entry.append(frame, element("span", "skill-event-index", index + 1), element("span", "purchase-tooltip", name));
+        entry.append(frame, element("span", "skill-event-index", talent ? unlock ?? "?" : abilityStep), element("span", "purchase-tooltip", name));
         (talent ? talents : abilities).append(entry);
       });
       for (const lane of [abilities, talents]) {
@@ -510,6 +514,45 @@ export function renderTeamAbilityBuild(players, side) {
     body.append(row);
   }
   table.append(body); scroll.append(table); panel.append(scroll); return panel;
+}
+
+export function renderAbilitySequence(upgrades, heroID) {
+  const root = element("div", "ability-sequence");
+  root.append(element("p", "ability-build-label", "Порядок изучения"));
+  if (!Array.isArray(upgrades) || !upgrades.length) {
+    root.append(element("p", "muted small ability-unavailable", Array.isArray(upgrades) ? "Нет записей о прокачке" : "История прокачки недоступна"));
+    return root;
+  }
+  const lanes = ["Способности", "Таланты"].map((label, index) => {
+    const lane = element("div", `sequence-lane ${index ? "sequence-talents" : "sequence-abilities"}`);
+    const list = element("ol", "ability-sequence-list");
+    list.setAttribute("aria-label", index ? "Таланты: уровень доступности по дереву героя, не фактический уровень изучения" : "Способности: исходный порядок изучения, не уровни героя");
+    lane.append(element("p", "sequence-label", index ? "Таланты · уровень доступности" : label), list);
+    root.append(lane);
+    return list;
+  });
+  let abilityStep = 0;
+  upgrades.forEach((id, index) => {
+    const info = abilityInfo(id), talent = Boolean(info?.[1]?.startsWith("special_bonus_"));
+    if (!talent) abilityStep++;
+    const name = info?.[0]?.replace(/\{[^}]+\}/g, "…") || `Способность #${id ?? "?"}`;
+    const entry = element("li", `skill-event${talent ? " skill-talent-event" : ""}`);
+    entry.value = talent ? index + 1 : abilityStep;
+    const unlock = talent ? talentUnlockLevel(heroID, id, upgrades.slice(0, index)) : null;
+    entry.title = talent ? `${name} · ${unlock == null ? "Уровень доступности неизвестен" : `Доступен с уровня ${unlock}`} · запись ${index + 1}` : `Способность ${abilityStep}: ${name} · запись ${index + 1}`;
+    entry.setAttribute("aria-label", entry.title);
+    const frame = element("span", "skill-event-icon", talent ? "Т" : Array.from(name)[0]);
+    frame.setAttribute("aria-hidden", "true");
+    const path = talent ? "icons/talents.svg" : info ? `abilities/${info[1]}.png` : null;
+    if (path) {
+      const icon = image(`https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/${path}`, "skill-event-image", "", 28);
+      if (icon) frame.append(icon);
+    }
+    entry.append(frame, element("span", "skill-event-index", talent ? unlock ?? "?" : abilityStep));
+    lanes[talent ? 1 : 0].append(entry);
+  });
+  for (const lane of lanes) if (!lane.children.length) lane.append(element("li", "muted small", "Нет записей"));
+  return root;
 }
 
 export function renderAbilityBuild(upgrades) {

@@ -147,6 +147,26 @@ test('skills and talents are displayed in separate lanes without inventing hero 
   assert.match(root.textContent, /не уровни героя/);
 });
 
+test('talents use hero-specific unlock levels rather than positions in the upgrade log', async () => {
+  const { renderSkillProgression, renderAbilitySequence } = await import('../assets/inventory.js');
+  const { talentUnlockLevel } = await import('../assets/items.js');
+  const talents = [6997, 1841, 412, 1724, 6138, 6282, 6552, 6998];
+  assert.deepEqual(talents.map((id, index) => talentUnlockLevel(105, id, talents.slice(0, index))), [10,15,20,25,27,28,29,30]);
+  assert.equal(talentUnlockLevel(999, 6997), null);
+  assert.equal(talentUnlockLevel(105, 999999), null);
+  const upgrades = [5601, 879, 5601, 886, 5601, 5599, 5601, 886, 886, 886, 6997, 879, 5599, 879, 879, 1841];
+  for (const root of [renderSkillProgression({ players: [{ hero_id:105, side:'radiant', ability_upgrades:upgrades }] }), renderAbilitySequence(upgrades, 105)]) {
+    const entries = walk(root).filter(node => node.className?.split(' ').includes('skill-talent-event'));
+    assert.deepEqual(entries.map(entry => walk(entry).find(node => node.className === 'skill-event-index').textContent), ['10', '15']);
+    assert.ok(entries[0].title.includes('Доступен с уровня 10'));
+    assert.ok(entries[0].title.includes('запись 11'));
+    const skills = walk(root).filter(node => node.className?.split(' ').includes('skill-event') && !node.className.split(' ').includes('skill-talent-event'));
+    assert.deepEqual(skills.map(entry => walk(entry).find(node => node.className === 'skill-event-index').textContent), Array.from({length:14}, (_, index) => String(index + 1)));
+    assert.ok(skills[10].title.includes('Способность 11'));
+    assert.ok(skills[10].title.includes('запись 12'));
+  }
+});
+
 test('missing metadata and unknown player history have separate states', async () => {
   const { renderPurchases } = await import('../assets/inventory.js');
   globalThis.fetch = async () => reply({ available: false, players: [] });
