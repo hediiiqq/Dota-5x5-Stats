@@ -1,4 +1,4 @@
-// Independent of the DOM and server: reusable in a standalone team picker.
+// The balancing algorithm is DOM-independent; profiles use our server API.
 export const ROLES = ['Керри', 'Мидер', 'Офлейнер', 'Саппорт', 'Хард-саппорт'];
 export const FRIENDS_KEY = 'dota-stats:balancer:friends:v1';
 export const RANK_MAX_AGE = 5 * 60 * 1000;
@@ -35,7 +35,7 @@ export function parseAccountID(value) {
   return id && Number(id) <= 4294967295 ? id : null;
 }
 
-// Approximate community medal brackets, NOT exact MMR returned by OpenDota.
+// Approximate community medal brackets, NOT exact MMR returned by a provider.
 // API rank encoding: https://docs.opendota.com/ (rank_tier).
 // Medal boundaries can drift; keep all assumptions in this single table.
 const MEDALS = [
@@ -85,7 +85,7 @@ export function balanceTeams(players) {
   if (!Array.isArray(players) || players.length !== 10) throw new Error('Выберите ровно 10 игроков.');
   if (new Set(players.map(p => p.id)).size !== 10) throw new Error('Нужны 10 различных игроков: ID не должны повторяться.');
   for (const player of players) {
-    if (!playerEstimate(player)) throw new Error(`${player.name || player.id}: OpenDota не предоставляет ранг. Выберите другого игрока или обновите профиль позже.`);
+    if (!playerEstimate(player)) throw new Error(`${player.name || player.id}: источник не предоставляет ранг. Выберите другого игрока или обновите профиль позже.`);
     if (!Array.isArray(player.roles) || !player.roles.length || player.roles.some(r => !Number.isInteger(r) || r < 1 || r > 5)) throw new Error(`${player.name || player.id}: выберите допустимые позиции 1–5.`);
   }
   // Hall's condition catches combinations of preferences, not just empty roles.
@@ -123,6 +123,7 @@ function cleanFriends(values) {
     seen.add(id);
     friends.push({ id, name: typeof value.name === 'string' ? value.name.slice(0, 120) : `Игрок ${id}`,
       avatar: safeAvatar(value.avatar), rankTier: rankEstimate(value.rankTier) ? value.rankTier : null,
+      source: ['opendota', 'stratz'].includes(value.source) ? value.source : null,
       updatedAt: Number.isFinite(value.updatedAt) && value.updatedAt > 0 ? value.updatedAt : 0,
       roles: [...new Set(Array.isArray(value.roles) ? value.roles.filter(r => Number.isInteger(r) && r >= 1 && r <= 5) : [])].sort(), selected: value.selected === true });
   }
@@ -139,7 +140,7 @@ export function saveFriends(friends, storage = globalThis.localStorage) {
   catch { throw new Error('Не удалось сохранить список друзей. Изменения доступны в этой вкладке, но могут исчезнуть после перезагрузки.'); }
 }
 
-export function createOpenDotaClient({ fetcher = globalThis.fetch, minInterval = 1100, timeout = 12000 } = {}) {
+export function createProfileClient({ fetcher = globalThis.fetch, minInterval = 1100, timeout = 25000 } = {}) {
   let queue = Promise.resolve(), lastRequest = 0;
   return function getProfile(id, { signal } = {}) {
     if (parseAccountID(id) !== id) return Promise.reject(new Error('Некорректный Dota ID.'));
@@ -152,20 +153,17 @@ export function createOpenDotaClient({ fetcher = globalThis.fetch, minInterval =
       const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
       let response, payload;
       try {
-        response = await fetcher(`https://api.opendota.com/api/players/${id}`, { signal: requestSignal, credentials: 'omit', referrerPolicy: 'no-referrer' });
-        if (response.ok) payload = await response.json();
+        response = await fetcher(`/api/players/${id}/profile`, { signal: requestSignal, credentials: 'same-origin', cache: 'no-store' });
+        payload = await response.json();
       } catch {
         if (signal?.aborted) throw signal.reason;
-        throw new Error(requestSignal.aborted ? 'OpenDota не ответила вовремя. Попробуйте ещё раз.' : 'Не удалось связаться с OpenDota. Проверьте подключение и повторите запрос.');
+        throw new Error(requestSignal.aborted ? 'Сервис профилей не ответил вовремя. Попробуйте ещё раз.' : 'Не удалось получить профиль с сервера. Проверьте подключение и повторите запрос.');
       }
       if (!response.ok) {
-        if (response.status === 429) throw new Error('Достигнут лимит запросов OpenDota. Подождите минуту и повторите.');
-        if (response.status === 404) throw new Error('Профиль не найден в OpenDota. Проверьте Dota ID.');
-        throw new Error(`OpenDota временно недоступна (HTTP ${response.status}). Попробуйте позже.`);
+        throw new Error(typeof payload?.error?.message === 'string' ? payload.error.message : `Сервис профилей недоступен (HTTP ${response.status}). Попробуйте позже.`);
       }
-      if (!payload?.profile || String(payload.profile.account_id) !== id) throw new Error('OpenDota не вернула запрошенный профиль. Проверьте Dota ID.');
-      return { id, name: typeof payload.profile.personaname === 'string' ? payload.profile.personaname.slice(0, 120) : `Игрок ${id}`,
-        avatar: safeAvatar(payload.profile.avatarfull || payload.profile.avatarmedium), rankTier: rankEstimate(payload.rank_tier) ? payload.rank_tier : null, updatedAt: Date.now() };
+      if (!payload || payload.id !== id || typeof payload.name !== 'string' || !['opendota', 'stratz'].includes(payload.source) || (payload.rankTier != null && !rankEstimate(payload.rankTier))) throw new Error('Сервер вернул некорректный профиль. Проверьте Dota ID.');
+      return { id, name: payload.name.slice(0, 120), avatar: safeAvatar(payload.avatar), rankTier: payload.rankTier ?? null, source: payload.source, updatedAt: Date.now() };
     });
     queue = request.catch(() => {});
     return request;

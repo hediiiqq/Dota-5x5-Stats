@@ -1,5 +1,5 @@
 import { element, image, number } from './common.js';
-import { ROLES, RANK_MAX_AGE, parseAccountID, rankEstimate, playerEstimate, balanceTeams, databasePlayers, loadFriends, saveFriends, createOpenDotaClient } from './balancer.js';
+import { ROLES, RANK_MAX_AGE, parseAccountID, rankEstimate, playerEstimate, balanceTeams, databasePlayers, loadFriends, saveFriends, createProfileClient } from './balancer.js';
 
 function button(text, action, className = '') {
   const node = element('button', `button ${className}`, text);
@@ -13,10 +13,12 @@ function identity(player) {
   if (img) avatar.append(img);
   const text = element('div', 'balance-person');
   const name = element('a', 'balance-name', player.name);
-  name.href = `https://www.opendota.com/players/${player.id}`; name.target = '_blank'; name.rel = 'noopener noreferrer';
-  name.title = `${player.name} · OpenDota`;
+  const source = player.source === 'stratz' ? 'STRATZ' : 'OpenDota';
+  name.href = player.source === 'stratz' ? `https://stratz.com/players/${player.id}` : `https://www.opendota.com/players/${player.id}`; name.target = '_blank'; name.rel = 'noopener noreferrer';
+  name.title = `${player.name} · ${source}`;
   const estimate = playerEstimate(player);
   text.append(name, element('span', 'muted small', estimate ? `${estimate.label} · ${estimate.kind === 'floor' ? '≥ ' : estimate.kind === 'manual' ? '' : '≈ '}${number(estimate.mmr)} MMR${estimate.kind === 'manual' ? ' (вручную)' : ''}` : 'Ранг недоступен'));
+  if (player.source) text.append(element('span', 'muted small', source));
   node.append(avatar, text); return node;
 }
 
@@ -36,7 +38,7 @@ function roleChoices(roles, prefix, onChange, disabled = false) {
   return group;
 }
 
-export function renderBalancer(root, { getProfile = createOpenDotaClient(), getDatabaseMatches, loadDatabaseAvatars } = {}) {
+export function renderBalancer(root, { getProfile = createProfileClient(), getDatabaseMatches, loadDatabaseAvatars } = {}) {
   let friends = [], busy = false, variants = [], current = null, swapFrom = null, manual = false;
   let storageError = '';
   try { friends = loadFriends(); } catch (error) { storageError = error.message; }
@@ -97,7 +99,7 @@ export function renderBalancer(root, { getProfile = createOpenDotaClient(), getD
   const explanation = element('div', 'balance-method-body');
   explanation.append(element('p', '', 'Сначала закрываем позиции 1–5 в каждой команде. Затем среди всех допустимых разбиений выбираем минимальную разницу среднего примерного MMR. Средний MMR команды — сумма оценок пяти игроков, делённая на пять. Позиции равноправны: порядок выбора не задаёт приоритет.'),
     element('p', '', 'MMR — середина приблизительного диапазона медали и звёзд, а не точный рейтинг. Границы могут меняться. Для Титана можно указать MMR вручную в списке друзей. Ручное значение действует в этой вкладке и не сохраняется. Если поле пустое, используется нижняя граница 5 620 MMR. Игроки без доступного ранга не участвуют в расчёте.'),
-    element('p', '', 'Ранги запрашиваем из OpenDota перед расчётом, если с последней загрузки прошло больше пяти минут. «Обновить ранги» принудительно обновляет выбранных игроков. OpenDota может показывать устаревший ранг. Запросы идут последовательно; обновление десяти профилей занимает около 10–20 секунд.'),
+    element('p', '', 'Ранги обновляем перед расчётом, если с последней загрузки прошло больше пяти минут. «Обновить ранги» принудительно обновляет выбранных игроков. Основной источник — OpenDota; при временном сбое сервер автоматически использует STRATZ, если он настроен. Источник указан под рангом игрока. Оба сервиса могут показывать устаревшую медаль. Запросы идут последовательно; при сбоях обновление занимает больше времени.'),
     element('p', '', 'Друзья, выбранные позиции и последний ответ о ранге сохраняются только в этом браузере. MMR вычисляется заново и не сохраняется. После очистки данных браузера список исчезнет.'));
   const apiLink = element('a', '', 'Документация OpenDota'); apiLink.href = 'https://docs.opendota.com/'; apiLink.target = '_blank'; apiLink.rel = 'noopener noreferrer'; explanation.append(apiLink);
   details.append(explanation); root.append(toolbar, status, storageNote, grid, details);
@@ -327,7 +329,7 @@ export function renderBalancer(root, { getProfile = createOpenDotaClient(), getD
       input.value = ''; formRoles.clear();
       for (const checkbox of choices.querySelectorAll('input')) checkbox.checked = false;
       invalidate(); persist();
-      message(rankEstimate(profile.rankTier) ? `${profile.name} добавлен в список друзей.` : `${profile.name} добавлен, но ранг недоступен. Для расчёта нужен ранг OpenDota.`, !rankEstimate(profile.rankTier));
+      message(rankEstimate(profile.rankTier) ? `${profile.name} добавлен в список друзей.` : `${profile.name} добавлен, но ранг недоступен. Для расчёта нужен доступный ранг.`, !rankEstimate(profile.rankTier));
     } catch (error) { if (!controller.signal.aborted) addError.textContent = error.message; }
     finally { busy = false; add.textContent = 'Добавить друга'; renderRoster(); input.focus(); }
   });

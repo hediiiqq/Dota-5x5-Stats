@@ -102,18 +102,24 @@ test('storage persists profiles and roles but never derived or user-supplied MMR
   assert.throws(() => saveFriends(players(), { setItem() { throw new Error('quota'); } }), /сохран/i);
 });
 
-test('OpenDota profile loader handles identity, missing rank, rate limit and network failure', async () => {
-  const { createOpenDotaClient } = await load();
+test('profile loader uses the server, validates fallback source and preserves cancellation', async () => {
+  const { createProfileClient } = await load();
   let url;
-  const client = createOpenDotaClient({ minInterval: 0, fetcher: async u => { url = u; return { ok: true, json: async () => ({ rank_tier: 22, profile: { account_id: 123, personaname: '<img onerror=alert(1)>', avatarfull: 'https://cdn.example/avatar.png' } }) }; } });
+  const result={id:'123',name:'<img onerror=alert(1)>',avatar:'https://cdn.example/avatar.png',rankTier:22,source:'stratz'};
+  const client = createProfileClient({ minInterval: 0, fetcher: async u => { url = u; return { ok: true, json: async () => result }; } });
   const p = await client('123');
-  assert.equal(url, 'https://api.opendota.com/api/players/123'); assert.equal(p.rankTier, 22); assert.equal(p.name, '<img onerror=alert(1)>');
-  const mismatch = createOpenDotaClient({ minInterval: 0, fetcher: async () => ({ ok: true, json: async () => ({ profile: { account_id: 124 } }) }) });
-  await assert.rejects(mismatch('123'), /профил/i);
-  const unknown = createOpenDotaClient({ minInterval: 0, fetcher: async () => ({ ok: true, json: async () => ({ profile: { account_id: 123 }, rank_tier: null }) }) });
+  assert.equal(url, '/api/players/123/profile'); assert.equal(p.rankTier, 22); assert.equal(p.name, result.name);assert.equal(p.source,'stratz');
+  for(const change of [{id:'124'},{source:'unknown'},{name:null}]){
+   const invalid=createProfileClient({minInterval:0,fetcher:async()=>({ok:true,json:async()=>({...result,...change})})});
+   await assert.rejects(invalid('123'),/профил/i);
+  }
+  const unknown = createProfileClient({ minInterval: 0, fetcher: async () => ({ ok: true, json: async () => ({...result,rankTier:null}) }) });
   assert.equal((await unknown('123')).rankTier, null);
-  const limited = createOpenDotaClient({ minInterval: 0, fetcher: async () => ({ ok: false, status: 429 }) });
-  await assert.rejects(limited('123'), /лимит/i);
-  const offline = createOpenDotaClient({ minInterval: 0, fetcher: async () => { throw new TypeError('Failed to fetch'); } });
-  await assert.rejects(offline('123'), /OpenDota/);
+  const failed=createProfileClient({minInterval:0,fetcher:async()=>({ok:false,status:502,json:async()=>({error:{message:'STRATZ недоступна'}})})});
+  await assert.rejects(failed('123'),/STRATZ недоступна/);
+  const offline = createProfileClient({ minInterval: 0, fetcher: async () => { throw new TypeError('Failed to fetch'); } });
+  await assert.rejects(offline('123'), /сервер/i);
+  const controller=new AbortController();controller.abort();let called=false;
+  const cancelled=createProfileClient({minInterval:0,fetcher:async()=>{called=true;}});
+  await assert.rejects(cancelled('123',{signal:controller.signal}));assert.equal(called,false);
 });

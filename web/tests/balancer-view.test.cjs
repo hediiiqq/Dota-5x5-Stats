@@ -76,13 +76,15 @@ test('unknown ranks and storage failures are visible; roster changes remain avai
 test('adding validates duplicates and roles, persists a new profile without HTML rendering or MMR', async () => {
   const { renderBalancer } = await import('../assets/balancer-view.js');
   const saved = setup([]);
-  renderBalancer(root, { getProfile: async id => ({ id, name: '<script>alert(1)</script>', rankTier: 22, updatedAt: Date.now() }) });
+  renderBalancer(root, { getProfile: async id => ({ id, name: '<script>alert(1)</script>', rankTier: 22, source:'stratz', updatedAt: Date.now() }) });
   id('balance-account').value = '123';
   const submit = () => walk(root).find(n => n.tag === 'form').events.submit({ preventDefault() {} });
   await submit(); assert.match(id('balance-add-error').textContent, /позици/);
   const role = id('balance-add-role-1'); role.checked = true; role.events.change();
   await submit();
   assert.equal(saved()[0].name, '<script>alert(1)</script>');
+  assert.equal(saved()[0].source,'stratz');
+  assert.equal(walk(root).find(n=>n.className==='balance-name').href,'https://stratz.com/players/123');
   assert.equal(Object.hasOwn(saved()[0], 'mmr'), false);
   assert.equal(walk(root).some(n => n.tag === 'script'), false);
   id('balance-account').value = '123'; await submit(); assert.match(id('balance-add-error').textContent, /уже есть/);

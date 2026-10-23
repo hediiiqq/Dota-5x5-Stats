@@ -33,6 +33,10 @@ func SteamWebAPIKey() string {
 	return os.Getenv("STEAM_WEB_API_KEY")
 }
 
+func StratzToken() string {
+	return os.Getenv("STRATZ_TOKEN")
+}
+
 func Load() []SteamAccount {
 	account1 := SteamAccount{
 		Name:  "whymiutu",
