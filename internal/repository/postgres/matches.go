@@ -16,7 +16,8 @@ type MatchRow struct {
 	RawData []byte
 }
 
-func SaveMatch(ctx context.Context, tx pgx.Tx, matchId uint64, startedAt time.Time, duration uint32, gameMode protocol.DOTA_GameMode, lobbyType uint32, rawData []byte) (id int64, inserted bool, err error) {
+func SaveMatch(ctx context.Context, tx pgx.Tx, matchId uint64, startedAt time.Time, duration uint32, gameMode protocol.DOTA_GameMode,
+	lobbyType uint32, rawData []byte) (id int64, inserted bool, err error) {
 
 	err = tx.QueryRow(ctx, `
 	INSERT INTO public.matches (dota_match_id,started_at,duration,game_mode,lobby_type, raw_data)
@@ -98,4 +99,23 @@ func ListMatches(ctx context.Context, db *pgxpool.Pool, limit, offset int) ([]Ma
 	}
 
 	return matches, nil
+}
+
+func GetInternalMatchID(ctx context.Context, db *pgxpool.Pool, matchId int64) (uint64, error) {
+
+	var id int64
+
+	err := db.QueryRow(ctx, `
+	select id 
+	FROM public.matches
+	WHERE dota_match_id = $1
+`, matchId).Scan(&id)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("С начало нужно импортировать сам матч, ID: %d", matchId)
+		return 0, err
+	}
+
+	return uint64(id), nil
+
 }

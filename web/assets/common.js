@@ -3,6 +3,37 @@ const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
   day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
 });
 
+const surfaceMotions = new Map();
+let motionCleanupInstalled = false;
+
+// A small response to changing a view; the interface never depends on GSAP loading.
+export function animateSurface(root) {
+  const gsap = globalThis.gsap;
+  if (!root || root.isConnected === false || !gsap?.matchMedia) return;
+  surfaceMotions.get(root)?.revert();
+  const media = gsap.matchMedia();
+  surfaceMotions.set(root, media);
+  const release = () => {
+    media.revert();
+    if (surfaceMotions.get(root) === media) surfaceMotions.delete(root);
+  };
+  media.add("(prefers-reduced-motion: no-preference)", () => {
+    gsap.fromTo(root, { y: 4, opacity: .92 }, {
+      y: 0, opacity: 1, duration: .24, ease: "expo.out", overwrite: "auto",
+      onComplete: release,
+    });
+  });
+  // A non-matching query creates no tween and needs no retained listener.
+  if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) release();
+  if (!motionCleanupInstalled) {
+    globalThis.addEventListener("pagehide", () => {
+      for (const context of surfaceMotions.values()) context.revert();
+      surfaceMotions.clear();
+    });
+    motionCleanupInstalled = true;
+  }
+}
+
 export function element(tag, className = "", text) {
   const node = document.createElement(tag);
   node.className = className;
@@ -60,7 +91,7 @@ export function imageURL(value) {
   }
 }
 
-export function image(value, className, alt, size) {
+export function image(value, className, alt, size, fallbackURLs = []) {
   const url = imageURL(value);
   if (!url) return null;
   const img = element("img", className);
@@ -70,7 +101,12 @@ export function image(value, className, alt, size) {
   img.loading = "lazy";
   img.decoding = "async";
   img.referrerPolicy = "no-referrer";
-  img.addEventListener("error", () => { img.hidden = true; });
+  const alternatives = [...new Set(fallbackURLs.map(imageURL).filter(candidate => candidate && candidate !== url))];
+  img.addEventListener("error", () => {
+    const next = alternatives.shift();
+    if (next) img.src = next;
+    else img.hidden = true;
+  });
   img.src = url;
   return img;
 }

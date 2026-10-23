@@ -60,7 +60,8 @@ export function rivalries(matches, accountId) {
   return [...rivals.values()].sort((a, b) => b.games - a.games || a.name.localeCompare(b.name, "ru"));
 }
 export function records(matches) {
-  const result = Object.fromEntries(["kills", "assists", "hero_healing", "damage_per_min", "longest", "shortest"].map(key => [key, []]));
+  const metrics = ["kills", "deaths", "assists", "gold_per_min", "xp_per_min", "net_worth", "hero_healing"];
+  const result = Object.fromEntries([...metrics, "damage_per_min", "longest", "shortest"].map(key => [key, []]));
   function consider(key, value, match, player = null) {
     if (!measured(value)) return;
     const current = result[key][0]?.value;
@@ -71,7 +72,7 @@ export function records(matches) {
     const timed = measured(match.duration) && match.duration > 0;
     if (timed) { consider("longest", match.duration, match); consider("shortest", match.duration, match); }
     for (const player of participants(match)) {
-      for (const key of ["kills", "assists", "hero_healing"]) consider(key, player[key], match, player);
+      for (const key of metrics) consider(key, player[key], match, player);
       if (timed && measured(player.hero_damage)) consider("damage_per_min", player.hero_damage / (match.duration / 60), match, player);
     }
   }

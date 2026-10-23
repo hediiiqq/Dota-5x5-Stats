@@ -6,28 +6,31 @@
   <meta name="color-scheme" content="dark">
   <title>История матчей · Dota Stats</title>
   <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/styles.css">
+  <script async src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" referrerpolicy="no-referrer"></script>
   <script type="module" src="/assets/history.js"></script>
 </head>
 <body class="history-layout">
   <a class="skip-link" href="#main">К содержимому</a>
   <header class="site-header">
-    <a class="brand" href="/" aria-label="Dota Stats — история матчей"><span class="brand-mark" aria-hidden="true">D</span><span>DOTA<span class="brand-light"> STATS</span></span></a>
-    <nav aria-label="Главная навигация"><a id="header-history" class="nav-link active" href="/" aria-current="page">История матчей</a></nav>
-    <span class="header-note">МАТЧИ ВАШЕЙ ГРУППЫ</span>
+    <a class="brand" href="/" aria-label="Dota Stats — история матчей"><span>DOTA<span class="brand-light"> STATS</span></span></a>
+    <nav class="main-nav" aria-label="Главная навигация">
+      <a id="nav-history" class="nav-link" href="/">История матчей</a>
+      <a id="nav-stats" class="nav-link" href="/?view=stats">Общая статистика</a>
+      <a id="nav-player" class="nav-link" href="/?view=player">Игроки</a>
+      <a id="nav-allies" class="nav-link" href="/?view=allies">Союзники</a>
+      <a id="nav-insights" class="nav-link" href="/?view=insights">Аналитика</a>
+    </nav>
+
   </header>
   <main id="main" class="container">
     <section class="page-heading">
-      <div><p class="eyebrow">ОБЗОР ИГР</p><h1 id="page-title">История матчей<span class="heading-dot">.</span></h1><p id="page-subtitle" class="subtitle">Команды, герои и результаты сохранённых игр.</p></div>
-      <div class="source-label"><span class="source-dot" aria-hidden="true"></span>Сохранённые матчи</div>
+      <div><h1 id="page-title">История матчей</h1><p id="page-subtitle" class="subtitle">Команды, герои и результаты сохранённых игр.</p></div>
+      <div class="source-label">Сохранённые матчи</div>
     </section>
-    <nav class="section-nav" aria-label="Разделы статистики">
-      <a id="nav-history" href="/">Матчи</a>
-      <a id="nav-stats" href="/?view=stats">Общая статистика</a>
-      <a id="nav-player" href="/?view=player">Игроки</a>
-      <a id="nav-allies" href="/?view=allies">Союзники</a>
-      <a id="nav-insights" href="/?view=insights">Аналитика</a>
-    </nav>
     <section id="stats-panel" hidden aria-label="Статистика сохранённых игр">
       <div id="stats-status" class="status panel" role="status" aria-live="polite"></div>
       <div id="stats-content" hidden></div>

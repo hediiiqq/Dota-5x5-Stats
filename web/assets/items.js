@@ -552,6 +552,17 @@ export function itemInfo(id) {
   return Number.isInteger(id) && id > 0 ? items[id] ?? null : null;
 }
 
+export function itemImageURLs(id) {
+  const info = itemInfo(id);
+  if (!info) return [];
+  const slug = info[1].startsWith("recipe_") ? "recipe" : info[1];
+  return [
+    `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/items/${slug}.png`,
+    `https://cdn.steamstatic.com/apps/dota2/images/dota_react/items/${slug}.png`,
+    `https://cdn.steamstatic.com/apps/dota2/images/items/${slug}_lg.png`,
+  ];
+}
+
 // Official Dota 2 ability IDs, names and image slugs; snapshot 2026-10-20.
 // Source: https://www.dota2.com/datafeed/abilitylist?language=english
 const abilities = Object.freeze({

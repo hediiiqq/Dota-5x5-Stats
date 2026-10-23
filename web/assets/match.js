@@ -2,6 +2,7 @@ import { date, duration, winner, offsetFromURL, matchID, image, requestJSON, sho
 import { renderDraft } from "./draft.js";
 import { renderScoreboard, renderOverview, renderResult } from "./scoreboard.js";
 import { favoriteEditor } from "./favorites.js";
+import { renderPurchases, renderSkillProgression, renderMatchTabs } from "./inventory.js";
 
 const params = new URLSearchParams(location.search);
 const id = matchID(params.get("id"));
@@ -13,6 +14,7 @@ const content = document.querySelector("#match-content");
 let controller;
 let avatarSlots = new Map();
 let selectedView = "cards";
+let selectedSection = "overview";
 
 function setView(view) {
   selectedView = view;
@@ -80,6 +82,17 @@ async function load() {
     render(match);
     status.hidden = true;
     content.hidden = false;
+    document.querySelector("#purchases").replaceChildren();
+    document.querySelector("#skills").replaceChildren(renderSkillProgression(match));
+    let purchasesLoaded = false;
+    const panels = Object.fromEntries(["overview", "purchases", "skills"].map(key => [key, document.querySelector(`#section-${key}`)]));
+    document.querySelector("#match-tabs").replaceChildren(renderMatchTabs(panels, selectedSection, key => {
+      selectedSection = key;
+      if (key === "purchases" && !purchasesLoaded) {
+        purchasesLoaded = true;
+        document.querySelector("#purchases").replaceChildren(renderPurchases(match, id, signal));
+      }
+    }));
     loadAvatars(signal);
   } catch (error) {
     if (signal.aborted) return;

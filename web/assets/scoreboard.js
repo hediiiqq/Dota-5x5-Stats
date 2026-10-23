@@ -1,5 +1,5 @@
-import { element, number, image, steamProfileURL } from "./common.js";
-import { renderInventory, renderAbilityBuild, renderTeamAbilityBuild } from "./inventory.js";
+import { element, number, image, steamProfileURL, animateSurface } from "./common.js";
+import { renderInventory, renderAbilityBuild } from "./inventory.js";
 
 const compactFormatter = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
 const valid = value => typeof value === "number" && Number.isFinite(value);
@@ -227,7 +227,6 @@ export function renderScoreboard(match, avatarSlots) {
   for (const [side, players] of sides) foot.append(totalsRow(match, side, players, maxTotal));
   table.append(foot); scroll.append(table); panel.append(scroll, sortStatus);
   panel.append(element("p", "score-legend", "ОЦ — общая ценность · УГ — урон героям · УС — урон строениям · ЛГ — лечение героев. Итоги — суммы по командам."));
-  for (const [side, players] of sides) panel.append(renderTeamAbilityBuild(players, sideName(side)));
   return panel;
 }
 
@@ -270,10 +269,11 @@ export function renderOverview(match, avatarSlots) {
     for (const [label, key] of [["Ценность героя", "net_worth"], ["Урон героям", "hero_damage"], ["Урон строениям", "tower_damage"], ["Лечение", "hero_healing"], ["Золото / мин", "gold_per_min"], ["Опыт / мин", "xp_per_min"]]) metrics.append(detailMetric(label, player[key]));
     const equipment = element("div", "detail-equipment");
     equipment.append(element("p", "ability-build-label", "Предметы на конец матча"), renderInventory(player, true));
-    detail.replaceChildren(heading, metrics, renderAbilityBuild(player.ability_upgrades), equipment);
+    detail.replaceChildren(heading, metrics, equipment);
     if (reveal) {
       title.focus({ preventScroll: true });
       detail.scrollIntoView({ block: "start" });
+      animateSurface(detail);
     }
   }
   for (const [side, players] of groups(match.players)) {
@@ -311,7 +311,7 @@ export function renderOverview(match, avatarSlots) {
     if (!players.length) grid.append(element("p", "muted small", "Нет данных об игроках этой стороны."));
     section.append(grid); root.append(section);
   }
-  root.append(element("p", "selection-hint muted small", "Нажмите на героя, чтобы посмотреть его показатели и порядок прокачки."), detail);
+  root.append(element("p", "selection-hint muted small", "Нажмите на героя, чтобы посмотреть его показатели и предметы. История изучения способностей — во вкладке «Прокачка»."), detail);
   if (firstPlayer) select(firstPlayer, buttons[0]);
   else detail.append(element("p", "score-empty muted", "Нет данных об игроках."));
   return root;

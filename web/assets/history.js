@@ -1,4 +1,4 @@
-import { element, image, heroBadge, number, steamProfileURL, date, duration, winner, offsetFromURL, matchID, requestJSON, showStatus, showLoading } from "./common.js";
+import { element, image, heroBadge, number, steamProfileURL, date, duration, winner, offsetFromURL, matchID, requestJSON, showStatus, showLoading, animateSurface } from "./common.js";
 import { itemInfo } from "./items.js";
 import { renderInsights } from "./insights-view.js";
 import { favoriteEditor } from "./favorites.js";
@@ -380,19 +380,20 @@ function renderGeneralStats(data, root) {
   root.append(grid);
 }
 
-function renderPlayerChoice(data, root) {
+function renderPlayerChoice(data, root, options = {}) {
   const players = ranked(data.players);
   if (!players.length) { root.append(element("p", "notice", "Нет игроков с известным Account ID. Анонимные игроки не объединяются между матчами.")); return null; }
-  const player = data.players.get(params.get("account_id")) || players[0];
+  const requestedId = options.selectedId ?? params.get("account_id");
+  let player = data.players.get(requestedId) || players[0];
   const picker = element("details", "player-picker panel");
-  picker.open = !params.has("account_id") || !data.players.has(params.get("account_id"));
-  picker.append(element("summary", "player-picker-heading", `Выбрать игрока · ${player.name}`));
+  picker.open = !options.onSelect && (!params.has("account_id") || !data.players.has(params.get("account_id")));
+  const summary = element("summary", "player-picker-heading", `${options.label || "Выбрать игрока"} · ${player.name}`); picker.append(summary);
   const tools = element("div", "player-picker-tools");
-  const label = element("label", "stats-control-label", "Поиск по нику или Account ID"); label.htmlFor = "player-search";
-  const search = element("input", "stats-select player-search"); search.type = "search"; search.id = "player-search";
+  const label = element("label", "stats-control-label", "Поиск по нику или Account ID"); label.htmlFor = `${options.idPrefix || "player"}-search`;
+  const search = element("input", "stats-select player-search"); search.type = "search"; search.id = label.htmlFor;
   search.placeholder = "Введите ник или ID"; search.autocomplete = "off"; label.append(search);
-  const sortLabel = element("label", "stats-control-label", "Порядок игроков"); sortLabel.htmlFor = "player-order";
-  const sort = element("select", "stats-select"); sort.id = "player-order";
+  const sortLabel = element("label", "stats-control-label", "Порядок игроков"); sortLabel.htmlFor = `${options.idPrefix || "player"}-order`;
+  const sort = element("select", "stats-select"); sort.id = sortLabel.htmlFor;
   for (const [value, text] of [["games-desc", "Игр: больше сначала"], ["games-asc", "Игр: меньше сначала"], ["name-asc", "Имя: А → Я"], ["name-desc", "Имя: Я → А"], ["rate-desc", "Винрейт: выше сначала"], ["rate-asc", "Винрейт: ниже сначала"]]) {
     const option = element("option", "", text); option.value = value; sort.append(option);
   }
@@ -411,8 +412,15 @@ function renderPlayerChoice(data, root) {
     list.replaceChildren();
     for (const record of choices.slice(0, visible)) {
       const row = element("li");
-      const link = element("a", "player-choice");
-      link.href = `/?view=${view}&account_id=${encodeURIComponent(record.id)}${view === "allies" ? `&min_games=${minimumGames()}` : ""}`;
+      const link = element(options.onSelect ? "button" : "a", "player-choice");
+      if (options.onSelect) {
+        link.type = "button";
+        link.addEventListener("click", () => {
+          player = record; options.onSelect(record);
+          summary.textContent = `${options.label || "Выбрать игрока"} · ${player.name}`;
+          picker.open = false; renderChoices(); summary.focus?.();
+        });
+      } else link.href = options.playerURL ? options.playerURL(record.id) : `/?view=${view}&account_id=${encodeURIComponent(record.id)}${view === "allies" ? `&min_games=${minimumGames()}` : ""}`;
       if (record.id === player.id) link.setAttribute("aria-current", "true");
       link.append(playerAvatar(record));
       const identity = element("span", "stats-player-text"); identity.append(element("span", "", record.name), element("span", "muted small", `ID ${record.id}`));
@@ -429,6 +437,7 @@ function renderPlayerChoice(data, root) {
   sort.addEventListener("change", () => { visible = 20; renderChoices(); });
   more.addEventListener("click", () => { visible += 20; renderChoices(); });
   picker.append(found, list, more); root.append(picker); renderChoices();
+  if (options.onSelect) return player;
   if (params.has("account_id") && !data.players.has(params.get("account_id"))) {
     root.append(element("p", "notice", "Указанный игрок не найден в сохранённых матчах. Выберите игрока из списка."));
     return null;
@@ -550,9 +559,15 @@ async function loadStats() {
     coverage.append(element("p", "muted small", `Выборка: ${number(data.matches)} сохранённых матчей. После импорта новых игр нажмите «Обновить». Анонимных записей игроков: ${number(data.anonymous)}; они учитываются в общей статистике героев, но не в личной статистике.`));
     const refresh = element("button", "button button-quiet", "Обновить"); refresh.type = "button"; refresh.addEventListener("click", loadStats); coverage.append(refresh); root.append(coverage);
     if (view === "stats") renderGeneralStats(data, root);
-    else if (view === "insights") renderInsights(matches, data, root, { statsTable, sortedValue, rateCell, playerLink, renderMatch });
+    else if (view === "insights") renderInsights(matches, data, root, { statsTable, sortedValue, rateCell, playerLink, renderMatch,
+      choosePlayer: host => renderPlayerChoice(data, host, {
+        playerURL: id => `/?view=insights&section=rivals&account_id=${encodeURIComponent(id)}&min_games=${minimumGames()}`,
+      }),
+      chooseComparisonPlayer: (host, options) => renderPlayerChoice(data, host, options),
+    });
     else { const player = renderPlayerChoice(data, root); if (player) { if (view === "player") renderPlayerStats(player, root); else renderAllyStats(player, root); } }
     status.hidden = true; root.hidden = false;
+    animateSurface(root);
     void loadStatsAvatars(root, signal);
   } catch (error) {
     if (!signal.aborted) showStatus(status, "Не удалось рассчитать статистику", error.message, loadStats);
@@ -566,8 +581,6 @@ function start() {
 
 document.querySelector(`#nav-${view}`).setAttribute("aria-current", "page");
 if (view !== "history") {
-  document.querySelector("#header-history").removeAttribute("aria-current");
-  document.querySelector("#header-history").className = "nav-link";
   document.querySelector("#history-panel").hidden = true;
   document.querySelector("#stats-panel").hidden = false;
   const title = { stats: "Общая статистика", player: "Статистика игрока", allies: "Лучшие союзники", insights: "Аналитика матчей" }[view];

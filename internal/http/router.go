@@ -14,6 +14,7 @@ func NewRouter(db *pgxpool.Pool) *http.ServeMux {
 	avatars := handlers.NewAvatarHandler(config.SteamWebAPIKey())
 
 	mux.HandleFunc("GET /api/matches/{id}", handler.GetMatch)
+	mux.HandleFunc("GET /api/matches/{id}/purchases", handler.GetMetadata)
 
 	mux.HandleFunc("GET /api/matches", handler.ListMatches)
 
@@ -28,6 +29,7 @@ func NewRouter(db *pgxpool.Pool) *http.ServeMux {
 
 	mux.HandleFunc("/api/matches", methodNotAllowed)
 	mux.HandleFunc("/api/matches/{id}", methodNotAllowed)
+	mux.HandleFunc("/api/matches/{id}/purchases", methodNotAllowed)
 	mux.HandleFunc("/api/health", methodNotAllowed)
 	mux.HandleFunc("/api/players/avatars", methodNotAllowed)
 
