@@ -2,7 +2,7 @@ import { date, duration, winner, offsetFromURL, matchID, image, requestJSON, sho
 import { renderDraft } from "./draft.js";
 import { renderScoreboard, renderOverview, renderResult } from "./scoreboard.js";
 import { favoriteEditor } from "./favorites.js";
-import { renderPurchases, renderSkillProgression, renderMatchTabs } from "./inventory.js";
+import { renderPurchases, renderSkillProgression, renderMatchTabs, renderInventoryTimeline } from "./inventory.js";
 
 const params = new URLSearchParams(location.search);
 const id = matchID(params.get("id"));
@@ -83,14 +83,20 @@ async function load() {
     status.hidden = true;
     content.hidden = false;
     document.querySelector("#purchases").replaceChildren();
+    document.querySelector("#inventory-timeline").replaceChildren();
     document.querySelector("#skills").replaceChildren(renderSkillProgression(match));
     let purchasesLoaded = false;
-    const panels = Object.fromEntries(["overview", "purchases", "skills"].map(key => [key, document.querySelector(`#section-${key}`)]));
+    let inventoryLoaded = false;
+    const panels = Object.fromEntries(["overview", "purchases", "inventory", "skills"].map(key => [key, document.querySelector(`#section-${key}`)]));
     document.querySelector("#match-tabs").replaceChildren(renderMatchTabs(panels, selectedSection, key => {
       selectedSection = key;
       if (key === "purchases" && !purchasesLoaded) {
         purchasesLoaded = true;
         document.querySelector("#purchases").replaceChildren(renderPurchases(match, id, signal));
+      }
+      if (key === "inventory" && !inventoryLoaded) {
+        inventoryLoaded = true;
+        document.querySelector("#inventory-timeline").replaceChildren(renderInventoryTimeline(match, id, signal));
       }
     }));
     loadAvatars(signal);

@@ -1,4 +1,4 @@
-import { element, image, heroBadge, requestJSON, showStatus, showLoading, animateSurface } from "./common.js";
+import { element, image, heroBadge, number, requestJSON, showStatus, showLoading, animateSurface } from "./common.js";
 import { itemInfo, itemImageURLs, abilityInfo } from "./items.js";
 
 function itemImage(id, className, size) {
@@ -29,7 +29,7 @@ export function purchaseScale(seconds) {
 export function renderMatchTabs(panels, initial = "overview", onSelect = () => {}) {
   const nav = element("nav", "match-tabs");
   nav.setAttribute("role", "tablist"); nav.setAttribute("aria-label", "Статистика матча");
-  const entries = [["overview", "Обзор"], ["purchases", "Покупки предметов"], ["skills", "Прокачка"]];
+  const entries = [["overview", "Обзор"], ["purchases", "Покупки предметов"], ["inventory", "Инвентарь"], ["skills", "Прокачка"]].filter(([key]) => panels[key]);
   const buttons = entries.map(([key, name]) => {
     const button = element("button", "match-tab", name); button.type = "button"; button.id = `tab-${key}`;
     button.setAttribute("role", "tab"); button.setAttribute("aria-controls", `section-${key}`);
@@ -50,7 +50,8 @@ export function renderMatchTabs(panels, initial = "overview", onSelect = () => {
     if (changed) animateSurface(panels[key]);
   }
   buttons.forEach((button, index) => button.addEventListener("keydown", event => {
-    const target = event.key === "ArrowRight" ? (index + 1) % 3 : event.key === "ArrowLeft" ? (index + 2) % 3 : event.key === "Home" ? 0 : event.key === "End" ? 2 : null;
+    const count = entries.length;
+    const target = event.key === "ArrowRight" ? (index + 1) % count : event.key === "ArrowLeft" ? (index + count - 1) % count : event.key === "Home" ? 0 : event.key === "End" ? count - 1 : null;
     if (target !== null) { event.preventDefault(); select(entries[target][0], true); }
   }));
   nav.append(...buttons); select(panels[initial] ? initial : "overview"); return nav;
@@ -235,6 +236,192 @@ function itemSlot(id, label, level) {
   return slot;
 }
 
+// Snapshot arrays are sorted once after loading, never while scrubbing the timeline.
+export function inventorySnapshotAt(snapshots, time) {
+  let low = 0, high = snapshots.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (snapshots[middle].game_time <= time) low = middle + 1;
+    else high = middle;
+  }
+  return snapshots[low - 1] || null;
+}
+
+export function inventoryRecords(response, match, matchID) {
+  const invalid = () => { throw new Error("Сервер вернул некорректные снимки инвентаря."); };
+  if (!response || response.match_id !== String(matchID) || response.dota_match_id !== String(match.dota_match_id) ||
+      typeof response.available !== "boolean" || !Array.isArray(response.players)) invalid();
+  const slots = new Set(match.players.map(player => player.player_slot).filter(Number.isInteger));
+  const records = new Map();
+  const optionalCount = value => value == null || (Number.isSafeInteger(value) && value >= 0 && value <= 4294967295);
+  const itemID = value => Number.isInteger(value) && value >= -2147483648 && value <= 2147483647;
+  for (const entry of response.players) {
+    if (!entry || !slots.has(entry.player_slot) || records.has(entry.player_slot) || !Array.isArray(entry.snapshots)) invalid();
+    if (entry.net_worth != null && (!Array.isArray(entry.net_worth) || entry.net_worth.some(point =>
+      !point || !Number.isSafeInteger(point.game_time) || typeof point.value !== "number" || !Number.isFinite(point.value) || point.value < 0))) invalid();
+    for (const snapshot of entry.snapshots) {
+      if (!snapshot || !Number.isSafeInteger(snapshot.game_time) ||
+          !Array.isArray(snapshot.item_ids) || !snapshot.item_ids.every(itemID) ||
+          !Array.isArray(snapshot.backpack_item_ids) || !snapshot.backpack_item_ids.every(itemID) ||
+          [snapshot.neutral_item_id, snapshot.neutral_enhancement_id].some(value => value != null && !itemID(value)) ||
+          [snapshot.kills, snapshot.deaths, snapshot.assists, snapshot.level, snapshot.last_hits, snapshot.denies, snapshot.flags].some(value => !optionalCount(value))) invalid();
+    }
+    records.set(entry.player_slot, [...entry.snapshots].sort((a, b) => a.game_time - b.game_time));
+  }
+  if (!response.available && records.size) invalid();
+  return records;
+}
+
+export function snapshotAghanimState(snapshot) {
+  function state(bit, ids, scepter = false) {
+    if (snapshot.flags != null && (snapshot.flags & bit)) return { state: "permanent", label: "Улучшение активно по данным снимка" };
+    const main = snapshot.item_ids.find(id => ids.includes(id));
+    const backpack = snapshot.backpack_item_ids.find(id => ids.includes(id));
+    if (scepter && main === 108) return { state: "active", label: "Scepter в основном инвентаре" };
+    if (scepter && main == null && backpack === 108) return { state: "backpack", label: "Scepter в рюкзаке · неактивен" };
+    if (main != null || backpack != null) return { state: "item", label: "Предмет в снимке · постоянное улучшение не подтверждено" };
+    return snapshot.flags == null ? { state: "unknown", label: "Нет данных об улучшении в снимке" } : { state: "absent", label: "Не обнаружено в снимке" };
+  }
+  return { scepter: state(1, [108, 271, 727], true), shard: state(2, [609, 725]) };
+}
+
+function snapshotEquipment(snapshot) {
+  const root = element("div", "snapshot-equipment");
+  function group(title, ids, className = "") {
+    const section = element("div", `snapshot-item-group ${className}`);
+    section.append(element("h4", "muted small", title));
+    const items = element("div", "snapshot-items");
+    for (const id of ids) items.append(itemSlot(id == null ? null : id <= 0 ? 0 : id, title));
+    if (!ids.length) items.append(element("span", "snapshot-empty muted", "Пусто"));
+    section.append(items); root.append(section);
+  }
+  group("Инвентарь", snapshot.item_ids, "snapshot-main");
+  group("Рюкзак", snapshot.backpack_item_ids, "snapshot-backpack");
+  group("Нейтральный предмет", [snapshot.neutral_item_id], "snapshot-neutral");
+  group("Улучшение нейтрального предмета", [snapshot.neutral_enhancement_id], "snapshot-neutral");
+  const upgrades = renderAghanimStates(snapshotAghanimState(snapshot), "Улучшения Аганима на время снимка");
+  upgrades.className += " snapshot-upgrades";
+  root.append(upgrades); return root;
+}
+
+function snapshotPlayer(player, rows, time, netWorth = []) {
+  const card = element("article", `snapshot-player ${player.side}`);
+  const heading = element("div", "snapshot-player-heading"), identity = element("div");
+  identity.append(heroBadge(player), element("p", "snapshot-nickname", player.nickname || "Анонимный игрок"));
+  heading.append(identity, element("span", `snapshot-side ${player.side}`, player.side === "radiant" ? "Radiant" : "Dire"));
+  card.append(heading);
+  const worth = inventorySnapshotAt(netWorth, time);
+  const worthPanel = element("div", "snapshot-worth");
+  const worthValue = element("div", "snapshot-worth-value");
+  worthValue.append(element("span", "muted small", "Общая ценность"), element("strong", "mono", worth ? number(Math.round(worth.value)) : "—"));
+  worthPanel.append(worthValue, element("p", "muted small", worth ? `ОЦ на ${purchaseTime(worth.game_time)}${time > netWorth.at(-1).game_time ? " · Последнее доступное значение" : ""}` : netWorth.length ? "До первой точки ОЦ" : "Нет данных ОЦ по времени"));
+  card.append(worthPanel);
+  const snapshot = inventorySnapshotAt(rows, time);
+  if (!snapshot) {
+    card.append(element("p", "snapshot-no-data muted", rows.length ? `До первого снимка · доступен с ${purchaseTime(rows[0].game_time)}` : "Нет снимков игрока"));
+    return card;
+  }
+  const last = rows[rows.length - 1];
+  card.append(element("p", "snapshot-capture muted small", `Снимок на ${purchaseTime(snapshot.game_time)}${time > last.game_time ? " · Последний доступный снимок" : ""}`));
+  const metrics = element("dl", "snapshot-metrics");
+  for (const [title, key] of [["Уровень", "level"], ["Убийства", "kills"], ["Смерти", "deaths"], ["Помощи", "assists"], ["Добивания", "last_hits"], ["Denies", "denies"]]) {
+    const metric = element("div");
+    metric.append(element("dt", "muted small", title), element("dd", "mono", snapshot[key] == null ? "—" : snapshot[key]));
+    metrics.append(metric);
+  }
+  card.append(metrics, snapshotEquipment(snapshot)); return card;
+}
+
+export function renderInventoryTimeline(match, matchID, signal) {
+  const panel = element("section", "panel snapshot-panel");
+  panel.setAttribute("aria-labelledby", "snapshot-title");
+  const heading = element("div", "panel-heading"), title = element("h2", "", "Инвентарь по времени");
+  title.id = "snapshot-title"; heading.append(title);
+  const status = element("div", "status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+  const body = element("div", "snapshot-body"); body.hidden = true;
+  panel.append(heading, status, body);
+
+  function renderTimeline(records, netWorth) {
+    body.replaceChildren();
+    const allRows = [...records.values()].flat();
+    if (!allRows.length) { showStatus(status, "Снимки инвентаря недоступны", "Для этого матча не сохранены снимки инвентаря."); return; }
+    const times = [...allRows, ...netWorth.values()].flat().map(row => row.game_time);
+    const min = Math.min(0, ...times);
+    const max = Math.max(0, Number.isSafeInteger(match.duration) ? match.duration : 0, ...times);
+    let time = 0;
+    const selected = new Map(), buttons = new Map();
+    const picker = element("div", "snapshot-picker");
+    const cards = element("div", "snapshot-comparison");
+    const clock = element("output", "snapshot-clock mono", purchaseTime(time));
+    clock.setAttribute("aria-live", "off");
+    const slider = element("input", "snapshot-slider"); slider.id = "snapshot-time"; slider.type = "range";
+    slider.min = String(min); slider.max = String(max); slider.step = "1"; slider.value = String(time);
+    slider.setAttribute("aria-describedby", "snapshot-time-note");
+    const previous = element("button", "button snapshot-step", "Предыдущий снимок"); previous.type = "button";
+    const next = element("button", "button snapshot-step", "Следующий снимок"); next.type = "button";
+    const allTimes = [...new Set(allRows.map(row => row.game_time))].sort((a, b) => a - b);
+    function update() {
+      clock.textContent = purchaseTime(time); slider.value = String(time);
+      slider.setAttribute("aria-valuetext", `Время матча ${purchaseTime(time)}`);
+      for (const [slot, button] of buttons) button.setAttribute("aria-pressed", String([...selected.values()].some(player => player?.player_slot === slot)));
+      const players = [...selected.values()].filter(Boolean);
+      cards.className = `snapshot-comparison${players.length === 1 ? " snapshot-single" : ""}`;
+      cards.replaceChildren(...players.map(player => snapshotPlayer(player, records.get(player.player_slot) || [], time, netWorth.get(player.player_slot) || [])));
+      if (!players.length) cards.append(element("p", "snapshot-selection-empty muted", "Выберите игрока Radiant или Dire выше."));
+      previous.disabled = !allTimes.some(value => value < time);
+      next.disabled = !allTimes.some(value => value > time);
+    }
+    for (const [side, name] of [["radiant", "Radiant"], ["dire", "Dire"]]) {
+      const group = element("fieldset", `snapshot-team ${side}`); group.append(element("legend", "", name));
+      const choices = element("div", "snapshot-choices");
+      const players = match.players.filter(player => player.side === side && Number.isInteger(player.player_slot));
+      selected.set(side, players[0] || null);
+      for (const player of players) {
+        const button = element("button", "snapshot-pick"); button.type = "button";
+        button.setAttribute("data-player-slot", player.player_slot);
+        button.setAttribute("aria-label", `${name}: ${player.hero_name || "Герой"}, ${player.nickname || "Анонимный игрок"}`);
+        button.append(heroBadge(player), element("span", "snapshot-pick-name", player.nickname || "Анонимный игрок"));
+        button.addEventListener("click", () => {
+          selected.set(side, selected.get(side)?.player_slot === player.player_slot ? null : player); update();
+        });
+        buttons.set(player.player_slot, button); choices.append(button);
+      }
+      if (!players.length) choices.append(element("span", "muted small", "Нет данных об игроках команды"));
+      group.append(choices); picker.append(group);
+    }
+    slider.addEventListener("input", () => { time = Math.max(min, Math.min(max, Number(slider.value))); update(); });
+    previous.addEventListener("click", () => { time = allTimes.filter(value => value < time).at(-1) ?? time; update(); });
+    next.addEventListener("click", () => { time = allTimes.find(value => value > time) ?? time; update(); });
+    const timeline = element("div", "snapshot-timeline");
+    const timelineHeading = element("div", "snapshot-timeline-heading");
+    const label = element("label", "", "Время матча"); label.htmlFor = slider.id;
+    timelineHeading.append(label, clock); timeline.append(timelineHeading, slider);
+    const limits = element("div", "snapshot-limits muted small"); limits.append(element("span", "mono", purchaseTime(min)), element("span", "mono", purchaseTime(max)));
+    const steps = element("div", "snapshot-steps"); steps.append(previous, next);
+    timeline.append(limits, steps);
+    const note = element("p", "snapshot-note muted small", "Выберите по одному герою каждой команды для сравнения или оставьте одного. Повторное нажатие снимает выбор. Состояние берётся из последнего снимка не позже выбранного времени; между снимками данные не восстанавливаются. Все предметы показаны в порядке записи, без привязки к номерам слотов.");
+    note.id = "snapshot-time-note";
+    body.append(picker, timeline, cards, note); update(); status.hidden = true; body.hidden = false;
+  }
+  async function load() {
+    if (signal.aborted) return;
+    body.hidden = true; panel.setAttribute("aria-busy", "true"); showLoading(status, "Загружаем снимки инвентаря…");
+    try {
+      const response = await requestJSON(`/api/matches/${matchID}/inventory`, signal);
+      if (signal.aborted) return;
+      const records = inventoryRecords(response, match, matchID);
+      if (!response.available) { showStatus(status, "Снимки инвентаря недоступны", "Для этого матча расширенная статистика пока не сохранена."); return; }
+      const netWorth = new Map(response.players.map(entry => [entry.player_slot, [...(entry.net_worth || [])].sort((a, b) => a.game_time - b.game_time)]));
+      renderTimeline(records, netWorth);
+    } catch (error) {
+      if (!signal.aborted) showStatus(status, "Не удалось загрузить инвентарь", error.message, load);
+    } finally {
+      if (!signal.aborted) panel.setAttribute("aria-busy", "false");
+    }
+  }
+  load(); return panel;
+}
+
 export function renderInventory(player, large = false) {
   const inventory = element("div", `inventory${large ? " inventory-large" : ""}`);
   inventory.setAttribute("role", "group");
@@ -272,8 +459,11 @@ export function aghanimState(player) {
 }
 
 function renderAghanims(player) {
-  const root = element("div", "aghanim-upgrades"); root.setAttribute("aria-label", "Улучшения Аганима на конец матча");
-  const states = aghanimState(player);
+  return renderAghanimStates(aghanimState(player), "Улучшения Аганима на конец матча");
+}
+
+function renderAghanimStates(states, label) {
+  const root = element("div", "aghanim-upgrades"); root.setAttribute("aria-label", label);
   for (const [key, name, slug] of [["scepter", "Aghanim’s Scepter", "ultimate_scepter"], ["shard", "Aghanim’s Shard", "aghanims_shard"]]) {
     const status = states[key], slot = element("span", `aghanim-indicator aghanim-${status.state}`);
     slot.title = `${name}: ${status.label}`; slot.setAttribute("role", "img"); slot.setAttribute("aria-label", slot.title);
