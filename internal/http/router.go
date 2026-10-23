@@ -22,6 +22,7 @@ func NewRouter(db *pgxpool.Pool) *http.ServeMux {
 	mux.HandleFunc("GET /api/players/avatars", avatars.GetAvatars)
 
 	mux.HandleFunc("GET /api/matches/{id}/inventory", handler.GetInventory)
+	mux.HandleFunc("GET /api/matches/{id}/graphs", handler.GetGraphs)
 
 	methodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "GET, HEAD")
@@ -35,6 +36,7 @@ func NewRouter(db *pgxpool.Pool) *http.ServeMux {
 	mux.HandleFunc("/api/health", methodNotAllowed)
 	mux.HandleFunc("/api/players/avatars", methodNotAllowed)
 	mux.HandleFunc("/api/matches/{id}/inventory", methodNotAllowed)
+	mux.HandleFunc("/api/matches/{id}/graphs", methodNotAllowed)
 
 	registerWebRoutes(mux)
 

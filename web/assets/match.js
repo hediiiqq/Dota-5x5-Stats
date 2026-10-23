@@ -2,6 +2,7 @@ import { date, duration, winner, offsetFromURL, matchID, image, requestJSON, sho
 import { renderDraft } from "./draft.js";
 import { renderScoreboard, renderOverview, renderResult } from "./scoreboard.js";
 import { favoriteEditor } from "./favorites.js";
+import { renderGraphs } from "./graphs.js";
 import { renderPurchases, renderSkillProgression, renderMatchTabs, renderInventoryTimeline } from "./inventory.js";
 
 const params = new URLSearchParams(location.search);
@@ -84,12 +85,18 @@ async function load() {
     content.hidden = false;
     document.querySelector("#purchases").replaceChildren();
     document.querySelector("#inventory-timeline").replaceChildren();
+    document.querySelector("#graphs").replaceChildren();
     document.querySelector("#skills").replaceChildren(renderSkillProgression(match));
     let purchasesLoaded = false;
     let inventoryLoaded = false;
-    const panels = Object.fromEntries(["overview", "purchases", "inventory", "skills"].map(key => [key, document.querySelector(`#section-${key}`)]));
+    let graphsLoaded = false;
+    const panels = Object.fromEntries(["overview", "graphs", "purchases", "inventory", "skills"].map(key => [key, document.querySelector(`#section-${key}`)]));
     document.querySelector("#match-tabs").replaceChildren(renderMatchTabs(panels, selectedSection, key => {
       selectedSection = key;
+      if (key === "graphs" && !graphsLoaded) {
+        graphsLoaded = true;
+        document.querySelector("#graphs").replaceChildren(renderGraphs(match, id, signal));
+      }
       if (key === "purchases" && !purchasesLoaded) {
         purchasesLoaded = true;
         document.querySelector("#purchases").replaceChildren(renderPurchases(match, id, signal));

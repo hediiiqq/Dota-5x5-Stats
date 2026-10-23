@@ -1,4 +1,82 @@
 /* Match overview: team cards, selectable hero details and compact scoreboard. */
+/* Graph layout keeps the plot large; the readout overlays the right corner. */
+.graphs-panel { overflow:hidden; }
+.graph-modes { display:flex; gap:6px; flex-wrap:wrap; padding:16px 20px; border-bottom:1px solid var(--line); }
+.graph-mode, .graph-metric-toggle { border:1px solid var(--line); border-radius:4px; padding:9px 13px; background:transparent; color:var(--muted); font:inherit; font-size:13px; cursor:pointer; }
+.graph-mode[aria-pressed="true"], .graph-metric-toggle[aria-pressed="true"] { color:var(--text); background:#303030; border-color:#777; }
+.graph-mode:focus-visible, .graph-metric-toggle:focus-visible, .graph-player-toggle:focus-visible, .graph-team-toggle:focus-visible, .graph-kill:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.graph-layout { display:grid; grid-template-columns:220px minmax(0,1fr); }
+.graph-players { padding:14px 0; border-right:1px solid var(--line); }
+.graph-team + .graph-team { margin-top:20px; }
+.graph-team-heading { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:0 12px 10px; }
+.graph-team-heading h3 { margin:0; font-size:13px; font-weight:600; }
+.graph-team-toggle { border:0; background:transparent; color:var(--muted); font:inherit; font-size:11px; cursor:pointer; padding:6px 2px; }
+.graph-player-toggle { width:100%; display:flex; align-items:center; gap:8px; min-width:0; padding:10px; border:0; border-left:3px solid transparent; background:transparent; color:var(--text); text-align:left; font:inherit; cursor:pointer; }
+.graph-player-toggle[aria-pressed="true"] { background:#252525; }
+.graph-player-toggle[aria-pressed="false"] { opacity:.45; }
+.graph-player-toggle .hero-icon { width:42px; height:28px; object-fit:contain; }
+.graph-player-toggle .hero-identity { flex-shrink:0; }
+.graph-player-toggle .hero-identity > span { display:none; }
+.graph-player-text { min-width:0; display:flex; flex-direction:column; gap:3px; }
+.graph-player-text strong, .graph-player-text .small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+.graph-player-text .small { color:var(--muted); font-size:11px; }
+.graph-content { min-width:0; padding:16px; }
+.graph-note { min-height:40px; margin:0 0 12px; color:var(--muted); line-height:1.6; }
+.graph-kill-filter { width:100%; min-width:0; padding:9px; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:4px; font:inherit; font-size:12px; }
+.graph-death-controls { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:10px; min-width:0; }
+.graph-death-controls .graph-kill-filter { width:auto; }
+.graph-plot-host:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.graph-deaths-label { display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; }
+.graph-deaths-toggle { accent-color:var(--accent); }
+.graph-kill-filter:disabled { opacity:.45; }
+.graph-legend { display:flex; gap:8px; margin-bottom:10px; }
+.graph-legend:empty { display:none; }
+.graph-visual { position:relative; margin-top:14px; }
+.graph-plot { width:100%; min-width:0; overflow-x:auto; position:relative; }
+.graph-svg { width:100%; min-width:700px; height:auto; display:block; touch-action:pan-x; }
+.graph-axis { fill:#aaa; font-size:15px; font-family:inherit; font-variant-numeric:tabular-nums; }
+.graph-grid { stroke:#ffffff1a; stroke-width:1; }
+.graph-zero { stroke:#ffffff55; stroke-width:1; }
+.graph-cursor { stroke:#eee; stroke-width:1; stroke-opacity:.65; pointer-events:none; }
+.graph-kill { cursor:pointer; }
+.graph-kill-letter { fill:#eee; font-size:11px; }
+.graph-readout { position:absolute; width:220px; max-width:calc(100% - 16px); padding:10px; border:1px solid #555; background:#1b1b1bf2; box-shadow:0 4px 16px #0005; pointer-events:none; opacity:0; visibility:hidden; transform:translateY(5px); transition:opacity 160ms ease-out,transform 160ms ease-out,visibility 160ms; z-index:2; }
+.graph-visual:hover .graph-readout, .graph-content:focus-within .graph-readout { opacity:1; visibility:visible; transform:translateY(0); }
+.graph-readout[hidden] { display:none; }
+.graph-readout .hero-identity { display:flex; align-items:center; gap:7px; min-width:0; }
+.graph-readout .hero-icon { width:28px; height:20px; object-fit:contain; flex-shrink:0; }
+.graph-readout .hero-identity > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.graph-readout-title { margin:0 0 7px; font-size:13px; font-weight:600; }
+.graph-readout-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 8px; border-left:2px solid; padding:5px 0 5px 8px; }
+.graph-readout-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+.graph-readout-row strong { font-size:12px; font-weight:500; }
+.graph-readout-row .small { grid-column:1 / -1; font-size:10px; }
+.graph-nearby-kills { border-top:1px solid var(--line); margin-top:8px; }
+.graph-nearby-kills p { font-size:11px; line-height:1.5; }
+.graph-empty { min-height:280px; display:grid; place-content:center; text-align:center; margin:0; }
+.graph-help { font-size:11px; line-height:1.6; margin:12px 0 0; }
+@media(max-width:1000px) {
+ .graph-layout { grid-template-columns:170px minmax(0,1fr); }
+ .graph-player-toggle { padding:8px 6px; gap:5px; }
+ .graph-player-toggle .hero-icon { width:32px; }
+ .graph-death-controls { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+ .graph-kill-filter { width:auto; max-width:100%; }
+ .graph-readout { position:static; width:auto; max-width:none; margin-top:12px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 12px; opacity:1; visibility:visible; transform:none; box-shadow:none; }
+ .graph-readout-title, .graph-nearby-kills { grid-column:1 / -1; }
+}
+@media(prefers-reduced-motion:reduce) {
+ .graph-readout { transition:none; transform:none; }
+}
+@media(max-width:600px) {
+ .graph-layout { grid-template-columns:minmax(0,1fr); }
+ .graph-players { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-right:0; border-bottom:1px solid var(--line); }
+ .graph-team + .graph-team { margin-top:0; }
+ .graph-team-heading { flex-wrap:wrap; padding:0 10px 5px; gap:0; }
+ .graph-modes { padding:12px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .graph-mode { padding:10px 7px; font-size:12px; }
+ .graph-content { padding:12px; }
+ .graph-readout { grid-template-columns:minmax(0,1fr); }
+}
 .aghanim-upgrades { flex-basis:100%; display:flex; gap:8px; align-items:center; flex-wrap:wrap }
 .aghanim-indicator { display:inline-flex; align-items:center; gap:4px; padding:3px 6px; border:1px solid #606060; border-radius:4px; background:#151515; color:#c6f24e }
 .aghanim-image { width:28px; height:21px; object-fit:contain }
