@@ -29,7 +29,7 @@ export function purchaseScale(seconds) {
 export function renderMatchTabs(panels, initial = "overview", onSelect = () => {}) {
   const nav = element("nav", "match-tabs");
   nav.setAttribute("role", "tablist"); nav.setAttribute("aria-label", "Статистика матча");
-  const entries = [["overview", "Обзор"], ["graphs", "Графики"], ["purchases", "Покупки предметов"], ["inventory", "Инвентарь"], ["skills", "Прокачка"]].filter(([key]) => panels[key]);
+  const entries = [["overview", "Обзор"], ["graphs", "Графики"], ["records", "Рекорды"], ["purchases", "Покупки предметов"], ["inventory", "Инвентарь"], ["skills", "Прокачка"]].filter(([key]) => panels[key]);
   const buttons = entries.map(([key, name]) => {
     const button = element("button", "match-tab", name); button.type = "button"; button.id = `tab-${key}`;
     button.setAttribute("role", "tab"); button.setAttribute("aria-controls", `section-${key}`);

@@ -170,15 +170,16 @@ test('aborted request never updates inventory', async () => {
   assert.equal(byClass(root, 'snapshot-player').length, 0);
 });
 
-test('four match tabs include inventory and keyboard wraps across all tabs', async () => {
+test('six match tabs include records and keyboard wraps across all tabs', async () => {
   const { renderMatchTabs } = await import('../assets/inventory.js');
-  const panels = Object.fromEntries(['overview', 'purchases', 'inventory', 'skills'].map(key => [key, new Node('section')]));
+  const panels = Object.fromEntries(['overview', 'graphs', 'records', 'purchases', 'inventory', 'skills'].map(key => [key, new Node('section')]));
   const root = renderMatchTabs(panels);
   const buttons = walk(root).filter(node => node.tag === 'button');
-  assert.equal(buttons.length, 4);
+  assert.equal(buttons.length, 6);
   const key = name => ({ key: name, preventDefault() {} });
   buttons[0].events.keydown(key('End')); assert.equal(panels.skills.hidden, false);
-  buttons[3].events.keydown(key('ArrowRight')); assert.equal(panels.overview.hidden, false);
-  buttons[1].events.keydown(key('ArrowRight')); assert.equal(panels.inventory.hidden, false);
+  buttons[5].events.keydown(key('ArrowRight')); assert.equal(panels.overview.hidden, false);
+  buttons[1].events.keydown(key('ArrowRight')); assert.equal(panels.records.hidden, false);
+  buttons[3].events.keydown(key('ArrowRight')); assert.equal(panels.inventory.hidden, false);
   assert.match(fs.readFileSync(require.resolve('../match.html'), 'utf8'), /id="section-inventory"/);
 });

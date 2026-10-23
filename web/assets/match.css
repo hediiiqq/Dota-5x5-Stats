@@ -1,4 +1,11 @@
 /* Match overview: team cards, selectable hero details and compact scoreboard. */
+.match-records-title { margin:0 0 8px; font-size:22px; }
+.match-records-note { margin:0 0 24px; line-height:1.6; }
+.match-records .insight-record h3 { margin:0 0 12px; font-size:18px; }
+.match-record-leaders { list-style:none; padding:0; margin:0; }
+.match-record-player { overflow-wrap:anywhere; }
+.match-records .hero-identity { display:inline-flex; align-items:center; gap:8px; }
+.match-records .hero-icon { width:36px; height:24px; object-fit:contain; }
 /* Graph layout keeps the plot large; the readout overlays the right corner. */
 .graphs-panel { overflow:hidden; }
 .graph-modes { display:flex; gap:6px; flex-wrap:wrap; padding:16px 20px; border-bottom:1px solid var(--line); }

@@ -1,5 +1,5 @@
 import { element, number, duration, date, heroBadge, matchID } from "./common.js";
-import { metricLabels, summarizePlayers, rivalries, records, dailySummary, localDay, matchesInRange } from "./insights.js";
+import { metricLabels, playerRecordLabels, summarizePlayers, rivalries, records, dailySummary, localDay, matchesInRange } from "./insights.js";
 import { readFavorites, favoriteEditor } from "./favorites.js";
 
 const decimal = value => value == null ? "—" : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value);
@@ -106,7 +106,7 @@ function progressiveList(root, items, render) {
   more.addEventListener("click", () => { visible += 20; draw(); }); root.append(list, more); draw();
 }
 function recordPanels(root, data, ui) {
-  const labels = { kills: "Рекорд убийств", deaths: "Больше всего смертей", assists: "Рекорд помощи", gold_per_min: "Максимальный GPM", xp_per_min: "Максимальный XPM", net_worth: "Максимальный net worth", hero_healing: "Рекорд лечения", damage_per_min: "Рекорд урона героям в минуту", longest: "Самый длинный матч", shortest: "Самый короткий матч" };
+  const labels = { ...playerRecordLabels, longest: "Самый длинный матч", shortest: "Самый короткий матч" };
   const incomplete = new Set(["gold_per_min", "xp_per_min", "net_worth", "hero_healing", "damage_per_min"]);
   const grid = element("div", "stats-grid"); root.append(grid);
   for (const [key, title] of Object.entries(labels)) {

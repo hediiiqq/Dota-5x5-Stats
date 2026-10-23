@@ -3,6 +3,7 @@ import { renderDraft } from "./draft.js";
 import { renderScoreboard, renderOverview, renderResult } from "./scoreboard.js";
 import { favoriteEditor } from "./favorites.js";
 import { renderGraphs } from "./graphs.js";
+import { renderMatchRecords } from "./match-records.js";
 import { renderPurchases, renderSkillProgression, renderMatchTabs, renderInventoryTimeline } from "./inventory.js";
 
 const params = new URLSearchParams(location.search);
@@ -86,11 +87,12 @@ async function load() {
     document.querySelector("#purchases").replaceChildren();
     document.querySelector("#inventory-timeline").replaceChildren();
     document.querySelector("#graphs").replaceChildren();
+    document.querySelector("#records").replaceChildren(renderMatchRecords(match));
     document.querySelector("#skills").replaceChildren(renderSkillProgression(match));
     let purchasesLoaded = false;
     let inventoryLoaded = false;
     let graphsLoaded = false;
-    const panels = Object.fromEntries(["overview", "graphs", "purchases", "inventory", "skills"].map(key => [key, document.querySelector(`#section-${key}`)]));
+    const panels = Object.fromEntries(["overview", "graphs", "records", "purchases", "inventory", "skills"].map(key => [key, document.querySelector(`#section-${key}`)]));
     document.querySelector("#match-tabs").replaceChildren(renderMatchTabs(panels, selectedSection, key => {
       selectedSection = key;
       if (key === "graphs" && !graphsLoaded) {
