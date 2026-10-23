@@ -1,0 +1,17 @@
+{
+    # Browsers omit SNI for IP addresses; Docker's private IP is not the certificate name.
+    default_sni {$DOTA_PUBLIC_IP:157.228.187.252}
+}
+
+{$DOTA_PUBLIC_IP:157.228.187.252} {
+    tls {
+        issuer acme {
+            dir https://acme-v02.api.letsencrypt.org/directory
+            profile shortlived
+        }
+    }
+    reverse_proxy web:8080
+}
+
+# Add a domain-specific site here after its A record points at this VPS.
+import /etc/caddy/domains/*.caddy

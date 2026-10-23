@@ -14,7 +14,7 @@ const next = document.querySelector("#next");
 let controller;
 const params = new URLSearchParams(location.search);
 const requestedView = params.get("view");
-const view = ["stats", "player", "allies", "insights"].includes(requestedView) ? requestedView : "history";
+const view = ["stats", "player", "allies", "insights", "balancer"].includes(requestedView) ? requestedView : "history";
 
 // Keep reload, back navigation and copied page URLs on the same valid offset.
 if (view === "history") history.replaceState(null, "", offset ? `/?offset=${offset}` : "/");
@@ -576,6 +576,14 @@ async function loadStats() {
 
 function start() {
   if (view === "history") load();
+  else if (view === "balancer") {
+    const root = document.querySelector("#stats-content");
+    const status = document.querySelector("#stats-status");
+    showLoading(status, "Открываем балансировщик…");
+    import("./balancer-view.js").then(({ renderBalancer }) => {
+      renderBalancer(root, { getDatabaseMatches: fetchStatisticsMatches, loadDatabaseAvatars: loadStatsAvatars }); root.hidden = false; status.hidden = true;
+    }).catch(() => showStatus(status, "Не удалось открыть балансировщик", "Проверьте подключение и повторите попытку.", start));
+  }
   else loadStats();
 }
 
@@ -583,9 +591,13 @@ document.querySelector(`#nav-${view}`).setAttribute("aria-current", "page");
 if (view !== "history") {
   document.querySelector("#history-panel").hidden = true;
   document.querySelector("#stats-panel").hidden = false;
-  const title = { stats: "Общая статистика", player: "Статистика игрока", allies: "Лучшие союзники", insights: "Аналитика матчей" }[view];
+  const title = { stats: "Общая статистика", player: "Статистика игрока", allies: "Лучшие союзники", insights: "Аналитика матчей", balancer: "Балансировщик команд" }[view];
   document.querySelector("#page-title").textContent = title;
-  document.querySelector("#page-subtitle").textContent = "По сохранённым матчам вашей базы на момент загрузки.";
+  document.querySelector("#page-subtitle").textContent = view === "balancer" ? "Две пятёрки по вашим позициям и рангам OpenDota." : "По сохранённым матчам вашей базы на момент загрузки.";
+  if (view === "balancer") {
+    document.querySelector(".source-label").textContent = "5 × 5 · Позиции 1–5";
+    document.querySelector(".page-note").textContent = "Список друзей хранится в этом браузере. MMR рассчитывается приблизительно по рангу и не сохраняется.";
+  }
   document.title = `${title} · Dota Stats`;
 }
 start();

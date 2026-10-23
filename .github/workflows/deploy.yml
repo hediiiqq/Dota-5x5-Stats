@@ -1,0 +1,109 @@
+name: Verify, build and deploy
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: dota-stats-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: go test ./...
+      - name: Frontend tests when committed
+        run: |
+          if compgen -G 'web/tests/*.test.cjs' > /dev/null; then
+            node --test web/tests/*.test.cjs
+          else
+            echo 'No frontend tests are committed in this revision'
+          fi
+
+  image:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ref
+        shell: bash
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.ref.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    if: vars.DEPLOY_ENABLED == 'true'
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || 'root' }}
+      VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+      IMAGE: ${{ needs.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          test -n "$VPS_HOST"
+          test -n "$SSH_KEY"
+          test -n "$KNOWN_HOSTS"
+      - name: Authenticate registry on VPS
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | ssh -p "$VPS_PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+      - name: Upload deployment configuration
+        run: |
+          tar -czf /tmp/dota-deploy.tar.gz compose.yaml migrations deploy
+          scp -P "$VPS_PORT" -o BatchMode=yes /tmp/dota-deploy.tar.gz "$VPS_USER@$VPS_HOST:/opt/dota-stats/incoming-${GITHUB_SHA}.tar.gz"
+      - name: Deploy and check API
+        run: |
+          ssh -p "$VPS_PORT" -o BatchMode=yes "$VPS_USER@$VPS_HOST" "sh /opt/dota-stats/deploy/apply.sh '$IMAGE' '/opt/dota-stats/incoming-${GITHUB_SHA}.tar.gz'"
+      - name: Remove runner SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

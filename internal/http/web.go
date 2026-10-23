@@ -18,6 +18,8 @@ func registerWebRoutes(mux *http.ServeMux) {
 		{"/assets/styles.css", "web/assets/styles.css", "text/css; charset=utf-8"},
 		{"/assets/common.js", "web/assets/common.js", "text/javascript; charset=utf-8"},
 		{"/assets/history.js", "web/assets/history.js", "text/javascript; charset=utf-8"},
+		{"/assets/balancer.js", "web/assets/balancer.js", "text/javascript; charset=utf-8"},
+		{"/assets/balancer-view.js", "web/assets/balancer-view.js", "text/javascript; charset=utf-8"},
 		{"/assets/insights.js", "web/assets/insights.js", "text/javascript; charset=utf-8"},
 		{"/assets/insights-view.js", "web/assets/insights-view.js", "text/javascript; charset=utf-8"},
 		{"/assets/favorites.js", "web/assets/favorites.js", "text/javascript; charset=utf-8"},

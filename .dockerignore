@@ -1,0 +1,19 @@
+# Only application sources and public assets enter the build context.
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/server/
+!cmd/server/*.go
+!cmd/gc-check/
+!cmd/gc-check/*.go
+!internal/
+!internal/**/
+!internal/**/*.go
+!web/
+!web/*.html
+!web/assets/
+!web/assets/*.js
+!web/assets/*.css
+!Dockerfile
+!.dockerignore

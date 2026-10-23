@@ -1,0 +1,10 @@
+[Unit]
+Description=Import Dota Stats matches
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/dota-stats/deploy/import.sh
+TimeoutStartSec=20min

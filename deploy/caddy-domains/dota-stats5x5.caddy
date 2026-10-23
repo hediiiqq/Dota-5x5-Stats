@@ -1,0 +1,3 @@
+dota-stats5x5.duckdns.org {
+	reverse_proxy web:8080
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically import Dota Stats matches
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=30min
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target
