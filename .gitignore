@@ -3,6 +3,7 @@
 /.env
 /docs/api-match.example.json
 /.local/
+/docs/superpowers/
 
 # Local configuration and credentials
 .env.*
