@@ -63,6 +63,19 @@ main {
   flex:1
 }
 
+.lane-notice {
+  margin:24px 0;
+  padding:16px 20px;
+  border:1px solid var(--dire);
+  border-radius:12px;
+  background:var(--panel);
+  color:var(--text);
+  font-size:clamp(16px,2vw,20px);
+  font-weight:600;
+  line-height:1.5;
+  overflow-wrap:anywhere
+}
+
 .site-header {
   min-height:92px;
   padding:0 48px;
