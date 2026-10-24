@@ -1,4 +1,4 @@
-import { date, duration, winner, offsetFromURL, matchID, image, requestJSON, showStatus, showLoading } from "./common.js";
+import { date, duration, winner, offsetFromURL, historyPageSizeFromURL, historyPageURL, matchID, image, requestJSON, showStatus, showLoading } from "./common.js";
 import { renderDraft } from "./draft.js";
 import { renderScoreboard, renderOverview, renderResult } from "./scoreboard.js";
 import { favoriteEditor } from "./favorites.js";
@@ -10,7 +10,7 @@ const params = new URLSearchParams(location.search);
 const id = matchID(params.get("id"));
 const offset = offsetFromURL();
 const back = document.querySelector("#back");
-back.href = offset ? `/?offset=${offset}` : "/";
+back.href = historyPageURL(offset, historyPageSizeFromURL());
 const status = document.querySelector("#status");
 const content = document.querySelector("#match-content");
 let controller;

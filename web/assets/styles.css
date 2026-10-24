@@ -331,6 +331,10 @@ tbody tr:hover {
   background:#181818
 }
 
+.history-pagination { flex-wrap:wrap }
+.history-page-size { display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:14px; color:var(--muted) }
+.history-page-size .stats-select { width:auto; min-width:80px; max-width:100px }
+
 .pagination {
   display:flex;
   align-items:center;

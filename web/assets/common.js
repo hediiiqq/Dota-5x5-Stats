@@ -66,7 +66,30 @@ export function winner(value) {
 export function offsetFromURL() {
   const raw = new URLSearchParams(location.search).get("offset") ?? "0";
   const value = Number(raw);
-  return /^\d+$/.test(raw) && Number.isSafeInteger(value) && value <= Number.MAX_SAFE_INTEGER - 20 ? value : 0;
+  return /^\d+$/.test(raw) && Number.isSafeInteger(value) && value <= Number.MAX_SAFE_INTEGER - 100 ? value : 0;
+}
+
+const historyPageSizes = [5, 10, 15, 20, 50, 100];
+const historyPageSizeKey = "dota-stats.history-page-size";
+
+export function historyPageSize(raw) {
+  return historyPageSizes.find(size => String(size) === raw) ?? 5;
+}
+
+export function historyPageSizeFromURL() {
+  const raw = new URLSearchParams(location.search).get("limit");
+  if (raw !== null) return historyPageSize(raw);
+  try { return historyPageSize(localStorage.getItem(historyPageSizeKey)); }
+  catch { return 5; }
+}
+
+export function saveHistoryPageSize(size) {
+  try { localStorage.setItem(historyPageSizeKey, String(size)); }
+  catch { /* Pagination remains usable when browser storage is unavailable. */ }
+}
+
+export function historyPageURL(offset, limit) {
+  return `/?limit=${limit}${offset ? `&offset=${offset}` : ""}`;
 }
 
 export function matchID(value) {

@@ -77,7 +77,7 @@ test("hero buttons open only matching games, paginate, switch hero and restore f
   assert.match(entries()[0].textContent, /Матч #105/);
   assert.equal(forward.disabled, true);
   const link = findAll(panel, node => node.className === "button match-link")[0];
-  assert.equal(link.href, "/match?id=6&offset=0");
+  assert.equal(link.href, "/match?id=6&offset=0&limit=5");
   heroes[1].click();
   assert.equal(entries().length, 1);
   assert.match(entries()[0].textContent, /Матч #106/);

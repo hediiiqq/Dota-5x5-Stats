@@ -1,9 +1,9 @@
-import { element, image, heroBadge, number, steamProfileURL, date, duration, winner, offsetFromURL, matchID, requestJSON, showStatus, showLoading, animateSurface } from "./common.js";
+import { element, image, heroBadge, number, steamProfileURL, date, duration, winner, offsetFromURL, historyPageSize, historyPageSizeFromURL, saveHistoryPageSize, historyPageURL, matchID, requestJSON, showStatus, showLoading, animateSurface } from "./common.js";
 import { itemInfo } from "./items.js";
 import { renderInsights } from "./insights-view.js";
 import { favoriteEditor } from "./favorites.js";
 
-const limit = 5;
+const limit = historyPageSizeFromURL();
 const offset = offsetFromURL();
 const status = document.querySelector("#status");
 const content = document.querySelector("#history-content");
@@ -17,13 +17,23 @@ const requestedView = params.get("view");
 const view = ["stats", "player", "allies", "insights", "balancer"].includes(requestedView) ? requestedView : "history";
 
 // Keep reload, back navigation and copied page URLs on the same valid offset.
-if (view === "history") history.replaceState(null, "", offset ? `/?offset=${offset}` : "/");
+if (view === "history") {
+  history.replaceState(null, "", historyPageURL(offset, limit));
+  saveHistoryPageSize(limit);
+}
+const pageSize = document.querySelector("#page-size");
+pageSize.value = String(limit);
+pageSize.addEventListener("change", () => {
+  const size = historyPageSize(pageSize.value);
+  saveHistoryPageSize(size);
+  location.assign(historyPageURL(0, size));
+});
 document.querySelector("#page-number").textContent = `Страница ${Math.floor(offset / limit) + 1}`;
 document.querySelector("#history-title").textContent = offset ? "История игр" : "Последние игры";
 
 function pageLink(link, target, enabled) {
   link.setAttribute("aria-disabled", String(!enabled));
-  if (enabled) link.href = target ? `/?offset=${target}` : "/";
+  if (enabled) link.href = historyPageURL(target, limit);
   else link.removeAttribute("href");
 }
 
@@ -79,7 +89,7 @@ function renderMatch(match, options = {}) {
   const id = matchID(match.id);
   if (id) {
     const link = element("a", "button match-link", "Открыть матч →");
-    link.href = `/match?id=${encodeURIComponent(id)}&offset=${offset}`;
+    link.href = `/match?id=${encodeURIComponent(id)}&offset=${offset}&limit=${limit}`;
     link.setAttribute("aria-label", `Открыть матч ${match.dota_match_id ?? id}`);
     action.append(link);
   } else action.textContent = "—";
@@ -514,6 +524,7 @@ function renderPlayerSummary(player, root) {
 }
 
 function renderHeroMatches(hero, player, panel, close) {
+  const limit = 5;
   let page = 0;
   const heading = element("h2", "", `${hero.name} · Матчи игрока ${player.name}`);
   heading.id = "hero-matches-title"; heading.tabIndex = -1;
