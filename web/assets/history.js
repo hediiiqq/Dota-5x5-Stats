@@ -13,8 +13,19 @@ const previous = document.querySelector("#previous");
 const next = document.querySelector("#next");
 let controller;
 const params = new URLSearchParams(location.search);
-const requestedView = params.get("view");
-const view = ["stats", "player", "allies", "insights", "balancer"].includes(requestedView) ? requestedView : "history";
+let requestedView = params.get("view");
+// The Steam callback returns to /. Remember only the destination, never tokens.
+try {
+  const returnAt = Number(sessionStorage.getItem("dota-stats:admin-return"));
+  if (!location.search && returnAt > 0 && Date.now() - returnAt >= 0 && Date.now() - returnAt < 10 * 60 * 1000) {
+    requestedView = "admin";
+    history.replaceState(null, "", "/?view=admin");
+    sessionStorage.removeItem("dota-stats:admin-return");
+  } else if (requestedView === "admin" || Date.now() - returnAt >= 10 * 60 * 1000) {
+    sessionStorage.removeItem("dota-stats:admin-return");
+  }
+} catch { /* Browsers blocking storage can still open /?view=admin directly. */ }
+const view = ["stats", "player", "allies", "insights", "balancer", "admin"].includes(requestedView) ? requestedView : "history";
 
 // Keep reload, back navigation and copied page URLs on the same valid offset.
 if (view === "history") {
@@ -129,7 +140,14 @@ async function load() {
   }
 }
 
-addEventListener("pagehide", () => controller?.abort());
+addEventListener("pagehide", () => {
+  controller?.abort();
+  if (view === "admin") {
+    adminSession = null;
+    document.querySelector("#admin-content").replaceChildren();
+    document.querySelector("#admin-content").hidden = true;
+  }
+});
 addEventListener("pageshow", event => {
   if (event.persisted && controller?.signal.aborted) start();
 });
@@ -585,8 +603,158 @@ async function loadStats() {
   }
 }
 
+// Administrator access lives only at /?view=admin; public navigation has no link.
+let adminSession = null;
+let adminBusy = false;
+
+function adminButton(label, action, className = "button") {
+  const button = element("button", className, label);
+  button.type = "button";
+  button.addEventListener("click", action);
+  return button;
+}
+
+function adminMessage(title, description, { login = false, retry = false } = {}) {
+  const root = document.querySelector("#admin-content");
+  const panel = element("div", "panel admin-access");
+  panel.append(element("h2", "", title), element("p", "muted admin-description", description));
+  const actions = element("div", "admin-actions");
+  if (login) {
+    const link = element("a", "button admin-primary", "Войти через Steam");
+    link.href = "/auth/steam";
+    link.addEventListener("click", event => {
+      if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      try { sessionStorage.setItem("dota-stats:admin-return", String(Date.now())); } catch { /* Optional navigation preference. */ }
+    });
+    actions.append(link);
+  }
+  if (retry) actions.append(adminButton("Проверить снова", () => loadAdmin()));
+  panel.append(actions);
+  root.replaceChildren(panel);
+  root.hidden = false;
+}
+
+function renderAdminSession(session, message = "") {
+  const root = document.querySelector("#admin-content");
+  const panel = element("section", "panel admin-access");
+  panel.setAttribute("aria-labelledby", "admin-access-title");
+  const heading = element("div", "admin-access-heading");
+  const title = element("h2", "", "Доступ администратора");
+  title.id = "admin-access-title";
+  heading.append(title, element("span", "admin-connected", "Вход выполнен"));
+  const details = element("dl", "admin-session-details");
+  const profileRow = element("div", "");
+  const profile = element("a", "admin-profile", session.admin.steam_id);
+  profile.href = `https://steamcommunity.com/profiles/${session.admin.steam_id}`;
+  profile.target = "_blank";
+  profile.rel = "noopener noreferrer";
+  profile.setAttribute("aria-label", `Steam-профиль ${session.admin.steam_id}, откроется в новой вкладке`);
+  const identity = element("dd", "");
+  identity.append(profile, element("span", "muted small", "Профиль Steam"));
+  profileRow.append(element("dt", "", "SteamID64"), identity);
+  const expiryRow = element("div", "");
+  const expiry = element("dd", "");
+  const time = element("time", "", date(session.expires_at));
+  time.dateTime = session.expires_at;
+  expiry.append(time, element("span", "muted small", "По времени вашего устройства"));
+  expiryRow.append(element("dt", "", "Вход сохранён до"), expiry);
+  details.append(profileRow, expiryRow);
+  const actions = element("div", "admin-actions");
+  actions.append(adminButton("Выйти", () => logoutAdmin(false)),
+    adminButton("Выйти на всех устройствах", () => logoutAdmin(true), "button button-quiet"));
+  const feedback = element("p", "admin-feedback");
+  feedback.id = "admin-feedback";
+  feedback.setAttribute("role", "status");
+  feedback.setAttribute("aria-live", "polite");
+  feedback.textContent = message;
+  feedback.hidden = !message;
+  panel.append(heading, element("p", "muted admin-description", "Вы вошли через разрешённый Steam-аккаунт. Можно завершить текущий вход или отозвать все свои сессии."), details, actions, feedback);
+  root.replaceChildren(panel);
+  root.hidden = false;
+}
+
+async function requestAdmin(url, options = {}) {
+  controller?.abort();
+  const requestController = new AbortController();
+  controller = requestController;
+  const timer = setTimeout(() => requestController.abort(), 12000);
+  try {
+    const response = await fetch(url, { ...options, credentials: "same-origin", cache: "no-store", redirect: "error", signal: requestController.signal });
+    const data = !options.method && response.ok ? await response.json() : null;
+    return { status: response.status, ok: response.ok, data };
+  } finally { clearTimeout(timer); }
+}
+
+async function loadAdmin(message = "") {
+  if (adminBusy) return;
+  adminBusy = true;
+  adminSession = null;
+  const root = document.querySelector("#admin-content");
+  const status = document.querySelector("#admin-status");
+  root.hidden = true;
+  root.replaceChildren();
+  showLoading(status, "Проверяем доступ…");
+  try {
+    const response = await requestAdmin("/api/admin/session");
+    if (response.status === 401) {
+      adminMessage(message || "Вход в админ-панель", "Войдите через Steam-аккаунт, которому разрешено администрирование сайта.", { login: true });
+    } else if (response.status === 403) {
+      adminMessage("Нет прав администратора", "Этот Steam-аккаунт не имеет доступа к панели. Если права были изменены, проверьте доступ ещё раз.", { login: true, retry: true });
+    } else {
+      if (!response.ok) throw new Error("session_unavailable");
+      const session = response.data;
+      if (typeof session?.admin?.steam_id !== "string" || !/^[1-9]\d{0,19}$/.test(session.admin.steam_id) || typeof session.csrf_token !== "string" || !session.csrf_token ||
+          typeof session.expires_at !== "string" || !Number.isFinite(Date.parse(session.expires_at)) || Date.parse(session.expires_at) <= Date.now()) {
+        throw new Error("session_invalid");
+      }
+      adminSession = session;
+      renderAdminSession(session, message);
+    }
+    status.hidden = true;
+  } catch (error) {
+    if (controller?.signal.aborted && document.visibilityState === "hidden") return;
+    status.hidden = true;
+    adminMessage("Не удалось проверить доступ", "Сервер не ответил или вернул неполные данные. Проверьте соединение и повторите попытку.", { retry: true });
+  } finally { adminBusy = false; }
+}
+
+async function logoutAdmin(all) {
+  if (adminBusy || !adminSession) return;
+  adminBusy = true;
+  const root = document.querySelector("#admin-content");
+  const buttons = root.querySelectorAll("button");
+  for (const button of buttons) button.disabled = true;
+  const feedback = document.querySelector("#admin-feedback");
+  feedback.hidden = false;
+  feedback.textContent = all ? "Завершаем вход на всех устройствах…" : "Завершаем вход…";
+  try {
+    const response = await requestAdmin(all ? "/api/admin/logout-all" : "/api/admin/logout", {
+      method: "POST", headers: { "X-CSRF-Token": adminSession.csrf_token },
+    });
+    if (response.status === 204 || response.status === 401) {
+      adminSession = null;
+      adminMessage(response.status === 401 ? "Сессия завершена" : all ? "Вы вышли на всех устройствах" : "Вы вышли из админ-панели",
+        "Чтобы вернуться к управлению сайтом, войдите через Steam.", { login: true });
+      root.querySelector("a")?.focus();
+    } else if (response.status === 403) {
+      adminBusy = false;
+      await loadAdmin("Доступ или сессия изменились. Проверьте состояние и повторите действие.");
+    } else {
+      throw new Error("logout_unavailable");
+    }
+  } catch {
+    feedback.textContent = "Не удалось подтвердить выход. Повторите попытку или обновите состояние сессии.";
+    const retry = adminButton("Обновить состояние", () => loadAdmin());
+    feedback.replaceChildren(element("span", "", feedback.textContent), retry);
+  } finally {
+    adminBusy = false;
+    for (const button of buttons) button.disabled = false;
+  }
+}
+
 function start() {
   if (view === "history") load();
+  else if (view === "admin") loadAdmin();
   else if (view === "balancer") {
     const root = document.querySelector("#stats-content");
     const status = document.querySelector("#stats-status");
@@ -598,16 +766,22 @@ function start() {
   else loadStats();
 }
 
-document.querySelector(`#nav-${view}`).setAttribute("aria-current", "page");
+document.querySelector(`#nav-${view}`)?.setAttribute("aria-current", "page");
 if (view !== "history") {
   document.querySelector("#history-panel").hidden = true;
-  document.querySelector("#stats-panel").hidden = false;
-  const title = { stats: "Общая статистика", player: "Статистика игрока", allies: "Лучшие союзники", insights: "Аналитика матчей", balancer: "Балансировщик команд" }[view];
+  document.querySelector("#stats-panel").hidden = view === "admin";
+  const title = { stats: "Общая статистика", player: "Статистика игрока", allies: "Лучшие союзники", insights: "Аналитика матчей", balancer: "Балансировщик команд", admin: "Администрирование" }[view];
   document.querySelector("#page-title").textContent = title;
   document.querySelector("#page-subtitle").textContent = view === "balancer" ? "Две пятёрки по вашим позициям и доступным рангам игроков." : "По сохранённым матчам вашей базы на момент загрузки.";
   if (view === "balancer") {
     document.querySelector(".source-label").textContent = "5 × 5 · Позиции 1–5";
     document.querySelector(".page-note").textContent = "Список друзей хранится в этом браузере. MMR рассчитывается приблизительно по рангу и не сохраняется.";
+  }
+  if (view === "admin") {
+    document.querySelector("#admin-panel").hidden = false;
+    document.querySelector("#page-subtitle").textContent = "Доступ к панели и управление сессиями Steam.";
+    document.querySelector(".source-label").hidden = true;
+    document.querySelector(".page-note").textContent = "Доступ к админ-панели проверяется на сервере при каждом запросе.";
   }
   document.title = `${title} · Dota Stats`;
 }

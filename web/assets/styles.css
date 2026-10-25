@@ -1415,3 +1415,27 @@ tbody tr:hover { background:#202020; }
   .favorite-editor { padding-inline:16px; }
   .source-label { white-space:normal; }
 }
+
+/* Session management shares the site's existing tournament-record surfaces. */
+.admin-access { padding:28px; }
+.admin-access h2 { margin:0; font-size:20px; font-weight:600; letter-spacing:-.02em; line-height:1.4; }
+.admin-description { max-width:68ch; margin:12px 0 24px; font-size:14px; }
+.admin-access-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.admin-connected { color:var(--accent); font-size:13px; }
+.admin-session-details { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; margin:0 0 28px; padding:24px 0; border-block:1px solid var(--line); }
+.admin-session-details dt { margin-bottom:6px; color:var(--muted); font-size:13px; }
+.admin-session-details dd { display:flex; flex-direction:column; gap:3px; margin:0; font-size:17px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.admin-profile { width:fit-content; text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:4px; }
+.admin-profile:hover { color:var(--accent); }
+.admin-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+.admin-actions:empty { display:none; }
+.admin-actions .button { min-height:44px; }
+.admin-panel .admin-primary { background:var(--accent); border-color:var(--accent); color:var(--bg); }
+.admin-panel .admin-primary:hover { background:#d8ff79; border-color:#d8ff79; }
+.admin-feedback { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:20px 0 0; color:var(--muted); font-size:14px; }
+@media(max-width:600px) {
+  .admin-access { padding:20px; }
+  .admin-session-details { grid-template-columns:minmax(0,1fr); gap:20px; }
+  .admin-actions { align-items:stretch; flex-direction:column; }
+  .admin-actions .button { width:100%; }
+}
