@@ -1,0 +1,1 @@
+drop table public.admin_login_attempts , public.admin_openid_nonces;

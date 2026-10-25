@@ -8,9 +8,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewRouter(db *pgxpool.Pool) *http.ServeMux {
+func NewRouter(db *pgxpool.Pool, auth config.AuthConfig) *http.ServeMux {
 	mux := http.NewServeMux()
 	handler := handlers.MatchHandler{DB: db}
+	authHandler := handlers.AuthHandler{DB: db, Config: auth}
 	avatars := handlers.NewAvatarHandler(config.SteamWebAPIKey())
 	profiles := handlers.NewProfileHandler(config.StratzToken())
 
@@ -26,8 +27,20 @@ func NewRouter(db *pgxpool.Pool) *http.ServeMux {
 	mux.HandleFunc("GET /api/matches/{id}/inventory", handler.GetInventory)
 	mux.HandleFunc("GET /api/matches/{id}/graphs", handler.GetGraphs)
 
+	mux.HandleFunc("GET /api/admin/session", authHandler.GetSession)
+	mux.HandleFunc("POST /api/admin/logout", authHandler.Logout)
+	mux.HandleFunc("POST /api/admin/logout-all", authHandler.LogoutAll)
+	mux.HandleFunc("GET /auth/steam", authHandler.SteamLogin)
+	mux.HandleFunc("GET /auth/steam/callback", authHandler.SteamCallback)
+
 	methodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "GET, HEAD")
+		handlers.WriteError(w, http.StatusMethodNotAllowed,
+			"method_not_allowed", "Метод не поддерживается")
+	}
+
+	postMethodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", "POST")
 		handlers.WriteError(w, http.StatusMethodNotAllowed,
 			"method_not_allowed", "Метод не поддерживается")
 	}
@@ -40,6 +53,12 @@ func NewRouter(db *pgxpool.Pool) *http.ServeMux {
 	mux.HandleFunc("/api/players/{id}/profile", methodNotAllowed)
 	mux.HandleFunc("/api/matches/{id}/inventory", methodNotAllowed)
 	mux.HandleFunc("/api/matches/{id}/graphs", methodNotAllowed)
+	mux.HandleFunc("/api/admin/session", methodNotAllowed)
+
+	mux.HandleFunc("/api/admin/logout", postMethodNotAllowed)
+	mux.HandleFunc("/api/admin/logout-all", postMethodNotAllowed)
+	mux.HandleFunc("/auth/steam", methodNotAllowed)
+	mux.HandleFunc("/auth/steam/callback", methodNotAllowed)
 
 	registerWebRoutes(mux)
 

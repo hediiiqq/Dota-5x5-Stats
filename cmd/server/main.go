@@ -12,6 +12,12 @@ import (
 
 func main() {
 
+	auth, err := config.LoadAuthConfig()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	dbString := config.DB()
 
 	if dbString == "" {
@@ -27,7 +33,7 @@ func main() {
 	}
 	defer db.Close()
 
-	router := httpapi.NewRouter(db)
+	router := httpapi.NewRouter(db, auth)
 
 	log.Print("Запуск HTTP-сервера на адресе :8080 (все доступные сетевые интерфейсы)")
 

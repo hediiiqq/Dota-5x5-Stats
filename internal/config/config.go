@@ -1,8 +1,15 @@
 package config
 
 import (
+	"encoding/base64"
+	"errors"
+	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -13,6 +20,14 @@ type SteamAccount struct {
 	Pass  string
 	Token string
 }
+
+type AuthConfig struct {
+	PublicBaseURL string
+	AdminSteamIDs map[string]struct{}
+	CSRFSecret    []byte
+}
+
+const AdminSessionTTL = 15 * 24 * time.Hour
 
 func init() {
 	// loads values from .env into the system
@@ -52,4 +67,62 @@ func Load() []SteamAccount {
 	}
 	accounts := []SteamAccount{account1, account2}
 	return accounts
+}
+
+func LoadAuthConfig() (AuthConfig, error) {
+	baseURL := strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL"))
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil || parsedURL.Scheme != "https" || parsedURL.Hostname() == "" ||
+		parsedURL.User != nil || parsedURL.Opaque != "" ||
+		(parsedURL.Path != "" && parsedURL.Path != "/") ||
+		parsedURL.RawQuery != "" || parsedURL.ForceQuery || strings.Contains(baseURL, "#") {
+		return AuthConfig{}, fmt.Errorf("PUBLIC_BASE_URL: требуется полный HTTPS-адрес без пути, учётных данных, query и fragment")
+	}
+	if port := parsedURL.Port(); port != "" {
+		portNumber, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || portNumber == 0 {
+			return AuthConfig{}, fmt.Errorf("PUBLIC_BASE_URL: недопустимый порт")
+		}
+	}
+
+	authConfig := AuthConfig{
+		PublicBaseURL: strings.TrimSuffix(baseURL, "/"),
+		AdminSteamIDs: make(map[string]struct{}),
+	}
+
+	csrf := os.Getenv("ADMIN_CSRF_SECRET")
+
+	if csrf == "" {
+		return AuthConfig{}, errors.New("ADMIN_CSRF_SECRET пустой")
+	}
+
+	csrfToken, err := base64.StdEncoding.DecodeString(csrf)
+
+	if err != nil {
+		return AuthConfig{}, errors.New("Ошибка декодирования ADMIN_CSRF_SECRET ")
+	}
+
+	if len(csrfToken) != 32 {
+		return AuthConfig{}, errors.New("ADMIN_CSRF_SECRET: после декодирования требуется 32 байта")
+	}
+	authConfig.CSRFSecret = csrfToken
+
+	rawIDs := strings.TrimSpace(os.Getenv("ADMIN_STEAM_IDS"))
+	if rawIDs == "" {
+		return authConfig, nil
+	}
+	for index, value := range strings.Split(rawIDs, ",") {
+		id := strings.TrimSpace(value)
+		// SteamID64 must contain decimal digits only.
+		if id == "" || strings.IndexFunc(id, func(r rune) bool { return r < '0' || r > '9' }) != -1 {
+			return AuthConfig{}, fmt.Errorf("ADMIN_STEAM_IDS: элемент %d должен быть положительным десятичным SteamID64", index+1)
+		}
+		numericID, err := strconv.ParseUint(id, 10, 64)
+		if err != nil || numericID == 0 {
+			return AuthConfig{}, fmt.Errorf("ADMIN_STEAM_IDS: элемент %d вне допустимого диапазона uint64", index+1)
+		}
+		authConfig.AdminSteamIDs[strconv.FormatUint(numericID, 10)] = struct{}{}
+	}
+
+	return authConfig, nil
 }

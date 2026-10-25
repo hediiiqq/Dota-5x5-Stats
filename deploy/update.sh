@@ -14,6 +14,7 @@ if [ "${DOTA_RELEASE_LOCK_HELD:-}" != "1" ]; then
   exec 9>/run/lock/dota-stats-release.lock
   flock -w 1200 9
 fi
+export DOTA_RELEASE_LOCK_HELD=1
 umask 077
 release=/etc/dota-stats/release.env
 previous=$(sed -n 's/^DOTA_IMAGE=//p' "$release")
@@ -22,6 +23,10 @@ compose() { docker compose --env-file "$release" "$@"; }
 
 # Pull before changing the running release.
 docker pull "$image"
+# Migrate and grant auth permissions before switching the application image.
+# A failure leaves the previous web container and release.env in place.
+compose up -d --no-build --wait --wait-timeout 120 db
+/bin/sh deploy/migrate.sh
 cp "$release" "$release.previous"
 sed '/^DOTA_IMAGE=/d' "$release" > "$release.next"
 printf 'DOTA_IMAGE=%s\n' "$image" >> "$release.next"

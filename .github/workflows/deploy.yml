@@ -17,6 +17,20 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-bookworm
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: migration-test-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -26,6 +40,16 @@ jobs:
         with:
           node-version: '24'
       - run: go test ./...
+      - name: Deployment migration integration tests
+        env:
+          RUN_MIGRATION_TESTS: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: migration-test-only
+        run: |
+          for script in deploy/*.sh; do sh -n "$script"; done
+          node --test deploy/tests/migrations.test.cjs
       - name: Frontend tests when committed
         run: |
           if compgen -G 'web/tests/*.test.cjs' > /dev/null; then
