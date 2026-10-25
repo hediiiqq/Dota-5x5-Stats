@@ -78,8 +78,10 @@ GRANT USAGE ON SCHEMA public TO "$web_role";
 GRANT SELECT, INSERT, UPDATE, DELETE ON
   public.admin_sessions,
   public.admin_login_attempts,
-  public.admin_openid_nonces
+  public.admin_openid_nonces,
+  public.site_notices
 TO "$web_role";
+GRANT USAGE ON SEQUENCE public.site_notices_id_seq TO "$web_role";
 COMMIT;
 SQL
 }

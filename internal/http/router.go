@@ -12,6 +12,7 @@ func NewRouter(db *pgxpool.Pool, auth config.AuthConfig) *http.ServeMux {
 	mux := http.NewServeMux()
 	handler := handlers.MatchHandler{DB: db}
 	authHandler := handlers.AuthHandler{DB: db, Config: auth}
+	noticeHandler := handlers.SiteNoticeHandler{Db: db}
 	avatars := handlers.NewAvatarHandler(config.SteamWebAPIKey())
 	profiles := handlers.NewProfileHandler(config.StratzToken())
 
@@ -32,6 +33,12 @@ func NewRouter(db *pgxpool.Pool, auth config.AuthConfig) *http.ServeMux {
 	mux.HandleFunc("POST /api/admin/logout-all", authHandler.LogoutAll)
 	mux.HandleFunc("GET /auth/steam", authHandler.SteamLogin)
 	mux.HandleFunc("GET /auth/steam/callback", authHandler.SteamCallback)
+
+	mux.HandleFunc("GET /api/notices", noticeHandler.ListNotices)
+	mux.HandleFunc("GET /api/admin/notices", authHandler.ListAdminNotices)
+	mux.HandleFunc("POST /api/admin/notices", authHandler.CreateNotice)
+	mux.HandleFunc("PUT /api/admin/notices/{id}", authHandler.UpdateNotice)
+	mux.HandleFunc("DELETE /api/admin/notices/{id}", authHandler.DeleteNotice)
 
 	methodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "GET, HEAD")
@@ -59,6 +66,19 @@ func NewRouter(db *pgxpool.Pool, auth config.AuthConfig) *http.ServeMux {
 	mux.HandleFunc("/api/admin/logout-all", postMethodNotAllowed)
 	mux.HandleFunc("/auth/steam", methodNotAllowed)
 	mux.HandleFunc("/auth/steam/callback", methodNotAllowed)
+
+	mux.HandleFunc("/api/notices", methodNotAllowed)
+	mux.HandleFunc("/api/admin/notices", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", "GET, HEAD, POST")
+		handlers.WriteError(w, http.StatusMethodNotAllowed,
+			"method_not_allowed", "Метод не поддерживается")
+	})
+
+	mux.HandleFunc("/api/admin/notices/{id}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", "PUT, DELETE")
+		handlers.WriteError(w, http.StatusMethodNotAllowed,
+			"method_not_allowed", "Метод не поддерживается")
+	})
 
 	registerWebRoutes(mux)
 
