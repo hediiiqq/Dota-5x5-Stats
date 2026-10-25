@@ -18,7 +18,7 @@ if (!sessionResponse.ok) throw new Error('Сначала войди в адми�
 var session = await sessionResponse.json();
 if (!session.csrf_token) throw new Error('API сессии не вернул CSRF-токен');
 
-async function noticesRequest(method, path, body) {
+window.noticesRequest = async function (method, path, body) {
   var headers = {};
   if (method !== 'GET') headers['X-CSRF-Token'] = session.csrf_token;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -30,8 +30,11 @@ async function noticesRequest(method, path, body) {
   var data = raw ? JSON.parse(raw) : null;
   console.log(method, path, response.status, data);
   return {status: response.status, data};
-}
+};
 ```
+
+Вставить весь блок подготовки целиком, включая функцию. Ответ undefined после
+объявления — нормален. После перезагрузки страницы блок нужно выполнить заново.
 
 ## 2. Список — 200
 
@@ -113,5 +116,4 @@ console.log(adminList.status, await adminList.json());
 
 Если API возвращает 500, смотреть журналы сервера: проверить миграцию 007 и права
 роли приложения. Ответ 404 на сам маршрут после деплоя может означать откат на
-предыдущий образ. Эти запросы проверяют API; публичный HTML и редактор плашек
-на этом этапе ещё не подключены к нему.
+предыдущий образ. Эти запросы проверяют API отдельно от редактора плашек.

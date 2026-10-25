@@ -81,7 +81,7 @@ JSON-ответы — Content-Type: application/json. API не перенапр�
 | 400 | invalid_request | Неверное тело, поле или ID |
 | 401 | unauthenticated | Нет действующей сессии |
 | 403 | admin_required | Нет прав администратора |
-| 403 | csrf_failed | Отказ существующей проверки CSRF |
+| 403 | csrf_invalid | Отказ существующей проверки CSRF |
 | 404 | notice_not_found | Запись отсутствует |
 | 405 | method_not_allowed | Неподдерживаемый метод; вернуть Allow |
 | 413 | request_too_large | Тело больше 8 КиБ |

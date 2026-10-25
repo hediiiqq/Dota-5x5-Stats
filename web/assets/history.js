@@ -1,4 +1,4 @@
-import { element, image, heroBadge, number, steamProfileURL, date, duration, winner, offsetFromURL, historyPageSize, historyPageSizeFromURL, saveHistoryPageSize, historyPageURL, matchID, requestJSON, showStatus, showLoading, animateSurface } from "./common.js";
+import { element, image, heroBadge, number, steamProfileURL, date, duration, winner, offsetFromURL, historyPageSize, historyPageSizeFromURL, saveHistoryPageSize, historyPageURL, matchID, requestJSON, showStatus, showLoading, animateSurface, noticeItems, mountSiteNotices } from "./common.js";
 import { itemInfo } from "./items.js";
 import { renderInsights } from "./insights-view.js";
 import { favoriteEditor } from "./favorites.js";
@@ -144,6 +144,8 @@ addEventListener("pagehide", () => {
   controller?.abort();
   if (view === "admin") {
     adminSession = null;
+    adminNotices = null;
+    adminBusy = false;
     document.querySelector("#admin-content").replaceChildren();
     document.querySelector("#admin-content").hidden = true;
   }
@@ -606,6 +608,7 @@ async function loadStats() {
 // Administrator access lives only at /?view=admin; public navigation has no link.
 let adminSession = null;
 let adminBusy = false;
+let adminNotices = null;
 
 function adminButton(label, action, className = "button") {
   const button = element("button", className, label);
@@ -615,6 +618,7 @@ function adminButton(label, action, className = "button") {
 }
 
 function adminMessage(title, description, { login = false, retry = false } = {}) {
+  adminNotices = null;
   const root = document.querySelector("#admin-content");
   const panel = element("div", "panel admin-access");
   panel.append(element("h2", "", title), element("p", "muted admin-description", description));
@@ -669,18 +673,18 @@ function renderAdminSession(session, message = "") {
   feedback.textContent = message;
   feedback.hidden = !message;
   panel.append(heading, element("p", "muted admin-description", "Вы вошли через разрешённый Steam-аккаунт. Можно завершить текущий вход или отозвать все свои сессии."), details, actions, feedback);
-  root.replaceChildren(panel);
+  root.replaceChildren(createNoticesEditor(), panel);
   root.hidden = false;
 }
 
-async function requestAdmin(url, options = {}) {
+async function requestAdmin(url, options = {}, readJSON = !options.method) {
   controller?.abort();
   const requestController = new AbortController();
   controller = requestController;
   const timer = setTimeout(() => requestController.abort(), 12000);
   try {
     const response = await fetch(url, { ...options, credentials: "same-origin", cache: "no-store", redirect: "error", signal: requestController.signal });
-    const data = !options.method && response.ok ? await response.json() : null;
+    const data = readJSON && response.ok ? await response.json() : null;
     return { status: response.status, ok: response.ok, data };
   } finally { clearTimeout(timer); }
 }
@@ -709,6 +713,7 @@ async function loadAdmin(message = "") {
       }
       adminSession = session;
       renderAdminSession(session, message);
+      await loadAdminNotices();
     }
     status.hidden = true;
   } catch (error) {
@@ -719,7 +724,7 @@ async function loadAdmin(message = "") {
 }
 
 async function logoutAdmin(all) {
-  if (adminBusy || !adminSession) return;
+  if (adminBusy || adminNotices?.busy || !adminSession) return;
   adminBusy = true;
   const root = document.querySelector("#admin-content");
   const buttons = root.querySelectorAll("button");
@@ -752,6 +757,231 @@ async function logoutAdmin(all) {
   }
 }
 
+function createNoticesEditor() {
+  const section = element("section", "panel notices-editor");
+  section.setAttribute("aria-labelledby", "notices-title");
+  const heading = element("div", "notices-heading");
+  const title = element("h2", "", "Плашки сайта");
+  title.id = "notices-title";
+  const refresh = adminButton("Обновить список", () => adminNotices?.locked ? loadAdmin() : loadAdminNotices());
+  heading.append(title, refresh);
+  const description = element("p", "muted notices-description", "Объявления на главной и странице матча. Новые показываются первыми.");
+  const columns = element("div", "notices-columns");
+  const form = element("form", "notice-form");
+  const formTitle = element("h3", "", "Новая плашка");
+  const label = element("label", "", "Текст плашки");
+  label.htmlFor = "notice-text";
+  const input = element("textarea", "notice-input");
+  input.id = "notice-text";
+  input.name = "text";
+  input.rows = 5;
+  input.required = true;
+  input.setAttribute("aria-describedby", "notice-help notice-counter");
+  const help = element("p", "muted small", "Дату впишите в текст, если она нужна. Без HTML и форматирования.");
+  help.id = "notice-help";
+  const counter = element("p", "notice-counter muted small");
+  counter.id = "notice-counter";
+  const save = adminButton("Опубликовать", () => {} , "button admin-primary");
+  save.type = "submit";
+  const cancel = adminButton("Отменить изменение", () => editAdminNotice(null));
+  cancel.hidden = true;
+  const actions = element("div", "admin-actions");
+  actions.append(save, cancel);
+  const feedback = element("p", "notice-feedback");
+  feedback.setAttribute("role", "status");
+  feedback.setAttribute("aria-live", "polite");
+  feedback.hidden = true;
+  form.append(formTitle, label, input, help, counter, actions, feedback);
+  const published = element("div", "notices-published");
+  const listTitle = element("h3", "", "Опубликованные плашки");
+  const listStatus = element("p", "muted notices-list-status");
+  listStatus.setAttribute("role", "status");
+  const list = element("ul", "notices-list");
+  published.append(listTitle, listStatus, list);
+  columns.append(form, published);
+  section.append(heading, description, columns);
+  adminNotices = { section, form, formTitle, input, counter, save, cancel, refresh, feedback, list, listStatus,
+    items: [], editingId: null, busy: false, loaded: false, uncertain: false, locked: false, confirmId: null };
+  const editor = adminNotices;
+  input.addEventListener("input", () => updateNoticeControls(editor));
+  form.addEventListener("submit", event => { event.preventDefault(); saveAdminNotice(); });
+  updateNoticeControls(editor);
+  return section;
+}
+
+function updateNoticeControls(editor) {
+  const size = Array.from((editor.input.value || "").trim()).length;
+  editor.counter.textContent = `${size} / 500 символов`;
+  editor.input.setAttribute("aria-invalid", String(size > 500));
+  for (const button of document.querySelector("#admin-content").querySelectorAll("button")) button.disabled = editor.busy;
+  for (const button of editor.section.querySelectorAll("button")) button.disabled = editor.busy || editor.locked || editor.uncertain;
+  editor.refresh.disabled = editor.busy;
+  editor.refresh.textContent = editor.locked ? "Проверить доступ" : "Обновить список";
+  editor.input.disabled = editor.busy || editor.locked;
+  editor.save.disabled = editor.busy || editor.locked || !editor.loaded || editor.uncertain || !editor.input.value?.trim() || size > 500;
+  editor.save.textContent = editor.editingId ? "Сохранить изменения" : "Опубликовать";
+  editor.formTitle.textContent = editor.editingId ? "Изменение плашки" : "Новая плашка";
+  editor.cancel.hidden = !editor.editingId;
+}
+
+function noticeFeedback(editor, text, error = false) {
+  editor.feedback.textContent = text;
+  editor.feedback.hidden = !text;
+  editor.feedback.className = error ? "notice-feedback notice-error" : "notice-feedback";
+}
+
+function renderAdminNotices(editor) {
+  editor.listStatus.textContent = editor.items.length ? `Всего: ${editor.items.length}` : "Плашек пока нет. Опубликуйте первое объявление.";
+  editor.list.replaceChildren(...editor.items.map(item => {
+    const row = element("li", "notice-row");
+    const preview = element("p", "notice-preview", item.text);
+    const actions = element("div", "admin-actions notice-row-actions");
+    if (editor.confirmId === item.id) {
+      const question = element("p", "notice-delete-question", "Удалить эту плашку с обеих страниц?");
+      actions.append(adminButton("Удалить плашку", () => deleteAdminNotice(item.id), "button notice-danger"),
+        adminButton("Оставить", () => { editor.confirmId = null; renderAdminNotices(editor); editor.list.querySelector("button")?.focus(); }));
+      row.append(preview, question, actions);
+    } else {
+      actions.append(adminButton("Изменить", () => editAdminNotice(item)),
+        adminButton("Удалить", () => { editor.confirmId = item.id; renderAdminNotices(editor); editor.list.querySelector(".notice-danger")?.focus(); }));
+      row.append(preview, actions);
+    }
+    return row;
+  }));
+  updateNoticeControls(editor);
+}
+
+function editAdminNotice(item) {
+  const editor = adminNotices;
+  if (!editor || editor.busy || editor.locked || adminBusy) return;
+  editor.editingId = item?.id || null;
+  editor.input.value = item?.text || "";
+  editor.confirmId = null;
+  noticeFeedback(editor, "");
+  renderAdminNotices(editor);
+  editor.input.focus();
+}
+
+function noticeAccessFailure(response, editor) {
+  if (response.status === 401) {
+    adminSession = null;
+    adminMessage("Сессия завершена", "Войдите через Steam, чтобы продолжить управление плашками.", { login: true });
+    return true;
+  }
+  if (response.status === 403) {
+    editor.locked = true;
+    noticeFeedback(editor, "Сервер отклонил запрос. Нажмите «Проверить доступ» перед повторной отправкой.", true);
+    return true;
+  }
+  return false;
+}
+
+async function loadAdminNotices() {
+  const editor = adminNotices;
+  if (!editor || editor.busy || editor.locked || !adminSession) return;
+  editor.busy = true;
+  editor.listStatus.textContent = "Загружаем плашки…";
+  updateNoticeControls(editor);
+  try {
+    const response = await requestAdmin("/api/admin/notices");
+    if (editor !== adminNotices || noticeAccessFailure(response, editor)) return;
+    if (!response.ok) throw new Error("notices_unavailable");
+    editor.items = noticeItems(response.data);
+    if (editor.uncertain) noticeFeedback(editor, "Список обновлён. Проверьте, выполнено ли предыдущее действие, прежде чем отправлять его снова.");
+    editor.loaded = true;
+    editor.uncertain = false;
+    editor.confirmId = null;
+    renderAdminNotices(editor);
+  } catch {
+    if (editor !== adminNotices) return;
+    editor.listStatus.textContent = "Не удалось обновить список. Нажмите «Обновить список», чтобы повторить.";
+  } finally {
+    editor.busy = false;
+    if (editor === adminNotices) updateNoticeControls(editor);
+  }
+}
+
+async function saveAdminNotice() {
+  const editor = adminNotices;
+  if (!editor || adminBusy || editor.busy || editor.locked || !editor.loaded || editor.uncertain || !adminSession) return;
+  const text = (editor.input.value || "").trim();
+  if (!text || Array.from(text).length > 500) {
+    noticeFeedback(editor, "Введите от 1 до 500 символов без пробелов по краям.", true);
+    editor.input.focus();
+    return;
+  }
+  const editingId = editor.editingId;
+  editor.busy = true;
+  noticeFeedback(editor, "Сохраняем плашку…");
+  updateNoticeControls(editor);
+  try {
+    const response = await requestAdmin(editingId ? `/api/admin/notices/${editingId}` : "/api/admin/notices", {
+      method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": adminSession.csrf_token },
+      body: JSON.stringify({ text }),
+    }, true);
+    if (editor !== adminNotices || noticeAccessFailure(response, editor)) return;
+    if (response.status === 400 || response.status === 413 || response.status === 415) {
+      noticeFeedback(editor, "Сервер отклонил текст плашки. Проверьте длину и повторите отправку.", true);
+      return;
+    }
+    if (response.status === 404) {
+      noticeFeedback(editor, "Плашка уже удалена. Обновите список или отмените изменение, чтобы создать новую.", true);
+      return;
+    }
+    if (response.status !== (editingId ? 200 : 201)) throw new Error("save_unconfirmed");
+    const [saved] = noticeItems({ items: [response.data] });
+    if (editingId && saved.id !== editingId) throw new Error("save_invalid");
+    editor.items = noticeItems({ items: [...editor.items.filter(item => item.id !== saved.id), saved] });
+    editor.editingId = null;
+    editor.input.value = "";
+    editor.confirmId = null;
+    renderAdminNotices(editor);
+    noticeFeedback(editor, editingId ? "Изменения сохранены. Посетители увидят их после обновления страницы." : "Плашка опубликована. Она появится у посетителей после обновления страницы.");
+    editor.busy = false;
+    updateNoticeControls(editor);
+    editor.input.focus();
+  } catch {
+    if (editor !== adminNotices) return;
+    editor.uncertain = true;
+    noticeFeedback(editor, "Не удалось подтвердить сохранение. Текст остался в форме. Обновите список перед повторной отправкой.", true);
+  } finally {
+    editor.busy = false;
+    if (editor === adminNotices) updateNoticeControls(editor);
+  }
+}
+
+async function deleteAdminNotice(id) {
+  const editor = adminNotices;
+  if (!editor || adminBusy || editor.busy || editor.locked || editor.uncertain || !adminSession || editor.confirmId !== id) return;
+  editor.busy = true;
+  noticeFeedback(editor, "Удаляем плашку…");
+  updateNoticeControls(editor);
+  try {
+    const response = await requestAdmin(`/api/admin/notices/${id}`, {
+      method: "DELETE", headers: { "X-CSRF-Token": adminSession.csrf_token },
+    });
+    if (editor !== adminNotices || noticeAccessFailure(response, editor)) return;
+    if (response.status !== 204 && response.status !== 404) throw new Error("delete_unconfirmed");
+    editor.items = editor.items.filter(item => item.id !== id);
+    editor.confirmId = null;
+    if (editor.editingId === id) { editor.editingId = null; editor.input.value = ""; }
+    renderAdminNotices(editor);
+    noticeFeedback(editor, response.status === 404 ? "Эта плашка уже удалена." : "Плашка удалена.");
+    editor.busy = false;
+    updateNoticeControls(editor);
+    editor.refresh.focus();
+  } catch {
+    if (editor !== adminNotices) return;
+    editor.uncertain = true;
+    editor.confirmId = null;
+    renderAdminNotices(editor);
+    noticeFeedback(editor, "Не удалось подтвердить удаление. Обновите список, чтобы проверить результат.", true);
+  } finally {
+    editor.busy = false;
+    if (editor === adminNotices) updateNoticeControls(editor);
+  }
+}
+
 function start() {
   if (view === "history") load();
   else if (view === "admin") loadAdmin();
@@ -779,10 +1009,11 @@ if (view !== "history") {
   }
   if (view === "admin") {
     document.querySelector("#admin-panel").hidden = false;
-    document.querySelector("#page-subtitle").textContent = "Доступ к панели и управление сессиями Steam.";
+    document.querySelector("#page-subtitle").textContent = "Плашки сайта и управление доступом.";
     document.querySelector(".source-label").hidden = true;
     document.querySelector(".page-note").textContent = "Доступ к админ-панели проверяется на сервере при каждом запросе.";
   }
   document.title = `${title} · Dota Stats`;
 }
 start();
+if (view !== "admin") mountSiteNotices(document.querySelector("#site-notices"));

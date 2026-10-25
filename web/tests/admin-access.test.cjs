@@ -5,7 +5,7 @@ const path = require('node:path');
 const { runInNewContext } = require('node:vm');
 
 class Element {
-  constructor(tag = 'div') { this.tag = tag; this.children = []; this.events = {}; this.attrs = {}; this.hidden = false; }
+  constructor(tag = 'div') { this.tag = tag; this.children = []; this.events = {}; this.attrs = {}; this.hidden = false; this.value = ''; }
   get firstChild() { return this.children[0]; }
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) { this.children = nodes; this.text = ''; }
@@ -15,7 +15,7 @@ class Element {
   addEventListener(name, handler) { this.events[name] = handler; }
   querySelectorAll(selector) {
     return this.children.flatMap(child => [
-      ...((selector.startsWith('#') ? child.id === selector.slice(1) : child.tag === selector) ? [child] : []),
+      ...((selector.startsWith('#') ? child.id === selector.slice(1) : selector.startsWith('.') ? child.className?.split(' ').includes(selector.slice(1)) : child.tag === selector) ? [child] : []),
       ...child.querySelectorAll(selector),
     ]);
   }
@@ -28,10 +28,10 @@ const validSession = () => ({
   expires_at: new Date(Date.now() + 600000).toISOString(), csrf_token: 'fixture-csrf-token',
 });
 
-function open(handler) {
+function open(handler, noticeHandler = () => ({ status: 200, data: { items: [] } })) {
   const root = new Element();
   const status = new Element();
-  const writes = [], requests = [];
+  const writes = [], requests = [], noticeRequests = [];
   const context = {
     AbortController, setTimeout, clearTimeout,
     document: {
@@ -41,16 +41,17 @@ function open(handler) {
     sessionStorage: { setItem: (key, value) => writes.push([key, value]) },
     showLoading: node => { node.hidden = false; },
     fetch: async (url, options) => {
-      requests.push({ url, options });
-      const result = await handler(url, options);
+      const isNotice = url.startsWith('/api/admin/notices');
+      (isNotice ? noticeRequests : requests).push({ url, options });
+      const result = await (isNotice ? noticeHandler : handler)(url, options);
       return { status: result.status, ok: result.status >= 200 && result.status < 300, json: async () => result.data };
     },
   };
   const common = fs.readFileSync(path.join(__dirname, '../assets/common.js'), 'utf8').replace(/^export /gm, '');
   const history = fs.readFileSync(path.join(__dirname, '../assets/history.js'), 'utf8');
   const source = history.slice(history.indexOf('// Administrator access lives'), history.indexOf('\nfunction start()'));
-  runInNewContext(`${common}\nlet controller;\n${source}\nthis.ui = { loadAdmin, logoutAdmin, session: () => adminSession };`, context);
-  return { root, status, writes, requests, ...context.ui };
+  runInNewContext(`${common}\nlet controller;\n${source}\nthis.ui = { loadAdmin, logoutAdmin, saveAdminNotice, editAdminNotice, deleteAdminNotice, loadAdminNotices, editor: () => adminNotices, session: () => adminSession };`, context);
+  return { root, status, writes, requests, noticeRequests, ...context.ui };
 }
 
 test('signed-out access offers Steam login and remembers only the return destination', async () => {
@@ -156,4 +157,133 @@ test('logout failure never claims success and lets the user recheck the session'
   assert.ok(page.session());
   assert.ok(page.root.querySelectorAll('button').every(button => !button.disabled));
   assert.ok(page.root.querySelectorAll('button').some(button => button.textContent === 'Обновить состояние'));
+});
+
+test('notice list renders plain text and preserves bigint IDs in numeric order', async () => {
+  const page = open(() => ({ status: 200, data: validSession() }), () => ({ status: 200, data: { items: [
+    { id: '2', text: 'Second' }, { id: '9223372036854775807', text: '<img src=x onerror=alert(1)>' },
+  ] } }));
+  await page.loadAdmin();
+  assert.equal(page.editor().items[0].id, '9223372036854775807');
+  assert.match(page.editor().list.textContent, /<img src=x onerror=alert\(1\)>/);
+  assert.equal(page.editor().list.querySelectorAll('img').length, 0);
+});
+
+test('notice creation trims text, sends CSRF and only clears the form after 201', async () => {
+  const page = open(() => ({ status: 200, data: validSession() }), (url, options) => options.method === 'POST'
+    ? { status: 201, data: { id: '3', text: JSON.parse(options.body).text } }
+    : { status: 200, data: { items: [] } });
+  await page.loadAdmin();
+  page.editor().input.value = '  Новая плашка — 26.10.2026  ';
+  await page.saveAdminNotice();
+  const sent = page.noticeRequests[1];
+  assert.equal(sent.options.method, 'POST');
+  assert.equal(sent.options.headers['X-CSRF-Token'], 'fixture-csrf-token');
+  assert.equal(JSON.parse(sent.options.body).text, 'Новая плашка — 26.10.2026');
+  assert.equal(page.editor().input.value, '');
+  assert.match(page.editor().list.textContent, /Новая плашка/);
+  assert.match(page.editor().feedback.textContent, /опубликована/);
+});
+
+test('notice validation counts Unicode code points and blocks blank or oversized text', async () => {
+  const page = open(() => ({ status: 200, data: validSession() }), (url, options) => options.method === 'POST'
+    ? { status: 201, data: { id: '1', text: JSON.parse(options.body).text } }
+    : { status: 200, data: { items: [] } });
+  await page.loadAdmin();
+  for (const text of ['  ', 'я'.repeat(501)]) {
+    page.editor().input.value = text;
+    await page.saveAdminNotice();
+  }
+  assert.equal(page.noticeRequests.length, 1);
+  page.editor().input.value = '😀'.repeat(500);
+  await page.saveAdminNotice();
+  assert.equal(page.noticeRequests.length, 2);
+  assert.equal(page.editor().items[0].text.length, 1000);
+});
+
+test('editing uses PUT and keeps the draft when a record was removed', async () => {
+  const item = { id: '4', text: 'Old text' };
+  const page = open(() => ({ status: 200, data: validSession() }), (url, options) => options.method === 'PUT'
+    ? { status: 404 } : { status: 200, data: { items: [item] } });
+  await page.loadAdmin();
+  page.editAdminNotice(item);
+  page.editor().input.value = 'My changes';
+  await page.saveAdminNotice();
+  assert.equal(page.noticeRequests[1].url, '/api/admin/notices/4');
+  assert.equal(page.noticeRequests[1].options.method, 'PUT');
+  assert.equal(page.editor().input.value, 'My changes');
+  assert.match(page.editor().feedback.textContent, /уже удалена/);
+});
+
+test('notice deletion requires confirmation and handles 204 without JSON', async () => {
+  const page = open(() => ({ status: 200, data: validSession() }), (url, options) => options.method === 'DELETE'
+    ? { status: 204 } : { status: 200, data: { items: [{ id: '7', text: 'To remove' }] } });
+  await page.loadAdmin();
+  await page.deleteAdminNotice('7');
+  assert.equal(page.noticeRequests.length, 1);
+  page.editor().confirmId = '7';
+  await page.deleteAdminNotice('7');
+  assert.equal(page.noticeRequests[1].options.method, 'DELETE');
+  assert.equal(page.noticeRequests[1].options.headers['X-CSRF-Token'], 'fixture-csrf-token');
+  assert.equal(page.editor().items.length, 0);
+  assert.match(page.editor().feedback.textContent, /удалена/);
+});
+
+test('failed notice writes retain draft and require a list refresh before retry', async () => {
+  const page = open(() => ({ status: 200, data: validSession() }), (url, options) => {
+    if (options.method === 'POST') throw new Error('network');
+    return { status: 200, data: { items: [] } };
+  });
+  await page.loadAdmin();
+  page.editor().input.value = 'Keep this draft';
+  await page.saveAdminNotice();
+  assert.equal(page.editor().input.value, 'Keep this draft');
+  assert.equal(page.editor().uncertain, true);
+  await page.saveAdminNotice();
+  assert.equal(page.noticeRequests.length, 2);
+  await page.loadAdminNotices();
+  assert.equal(page.editor().uncertain, false);
+  assert.equal(page.editor().input.value, 'Keep this draft');
+});
+
+test('CSRF rejection locks writes and exposes access recheck without automatic retry', async () => {
+  const page = open(() => ({ status: 200, data: validSession() }), (url, options) => options.method
+    ? { status: 403 } : { status: 200, data: { items: [] } });
+  await page.loadAdmin();
+  page.editor().input.value = 'Keep draft on CSRF rejection';
+  await page.saveAdminNotice();
+  assert.equal(page.editor().locked, true);
+  assert.equal(page.editor().refresh.textContent, 'Проверить доступ');
+  assert.equal(page.editor().refresh.disabled, false);
+  assert.equal(page.editor().input.value, 'Keep draft on CSRF rejection');
+  await page.saveAdminNotice();
+  assert.equal(page.noticeRequests.length, 2);
+});
+
+test('pending notice save blocks duplicate submission and logout', async () => {
+  let finish;
+  const page = open(() => ({ status: 200, data: validSession() }), (url, options) => options.method
+    ? new Promise(resolve => { finish = resolve; }) : { status: 200, data: { items: [] } });
+  await page.loadAdmin();
+  page.editor().input.value = 'Only once';
+  const pending = page.saveAdminNotice();
+  await page.saveAdminNotice();
+  await page.logoutAdmin(false);
+  assert.equal(page.noticeRequests.length, 2);
+  assert.equal(page.requests.length, 1);
+  finish({ status: 201, data: { id: '1', text: 'Only once' } });
+  await pending;
+  assert.equal(page.editor().items.length, 1);
+});
+
+test('expired session during a write clears editor and offers login', async () => {
+  const page = open(() => ({ status: 200, data: validSession() }), (url, options) => options.method
+    ? { status: 401 } : { status: 200, data: { items: [] } });
+  await page.loadAdmin();
+  page.editor().input.value = 'Expired session';
+  await page.saveAdminNotice();
+  assert.equal(page.editor(), null);
+  assert.equal(page.session(), null);
+  assert.match(page.root.textContent, /Сессия завершена/);
+  assert.equal(page.root.querySelector('a').href, '/auth/steam');
 });

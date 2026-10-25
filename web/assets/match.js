@@ -1,4 +1,4 @@
-import { date, duration, winner, offsetFromURL, historyPageSizeFromURL, historyPageURL, matchID, image, requestJSON, showStatus, showLoading } from "./common.js";
+import { date, duration, winner, offsetFromURL, historyPageSizeFromURL, historyPageURL, matchID, image, requestJSON, showStatus, showLoading, mountSiteNotices } from "./common.js";
 import { renderDraft } from "./draft.js";
 import { renderScoreboard, renderOverview, renderResult } from "./scoreboard.js";
 import { favoriteEditor } from "./favorites.js";
@@ -121,3 +121,4 @@ addEventListener("pageshow", event => {
   if (event.persisted && controller?.signal.aborted) load();
 });
 load();
+mountSiteNotices(document.querySelector("#site-notices"));

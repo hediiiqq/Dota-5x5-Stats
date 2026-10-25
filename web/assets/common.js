@@ -6,6 +6,52 @@ const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
 const surfaceMotions = new Map();
 let motionCleanupInstalled = false;
 
+// Shared by the public pages and the administrator's preview. IDs stay strings.
+export function noticeItems(payload) {
+  if (!payload || !Array.isArray(payload.items)) throw new Error("Некорректный список плашек");
+  const ids = new Set();
+  for (const item of payload.items) {
+    if (!item || typeof item.id !== "string" || !/^[1-9]\d{0,18}$/.test(item.id) ||
+        BigInt(item.id) > 9223372036854775807n || ids.has(item.id) ||
+        typeof item.text !== "string" || !item.text.trim() || Array.from(item.text).length > 500) {
+      throw new Error("Некорректная плашка");
+    }
+    ids.add(item.id);
+  }
+  return [...payload.items].sort((a, b) => a.id.length === b.id.length ? b.id.localeCompare(a.id) : b.id.length - a.id.length);
+}
+
+export function mountSiteNotices(root) {
+  if (!root) return;
+  let controller;
+  async function loadNotices() {
+    controller?.abort();
+    const current = new AbortController();
+    controller = current;
+    const timer = setTimeout(() => current.abort(), 12000);
+    try {
+      const response = await fetch("/api/notices", { signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error" });
+      if (!response.ok) throw new Error("notices_unavailable");
+      const items = noticeItems(await response.json());
+      if (current.signal.aborted) return;
+      root.replaceChildren(...items.map(item => element("p", "lane-notice", item.text)));
+      root.hidden = !items.length;
+    } catch {
+      if (controller !== current || (current.signal.aborted && document.visibilityState === "hidden")) return;
+      const error = element("div", "site-notices-error");
+      const retry = element("button", "button button-quiet", "Повторить");
+      retry.type = "button";
+      retry.addEventListener("click", loadNotices);
+      error.append(element("span", "muted", "Не удалось загрузить объявления."), retry);
+      root.replaceChildren(error);
+      root.hidden = false;
+    } finally { clearTimeout(timer); }
+  }
+  globalThis.addEventListener("pagehide", () => controller?.abort());
+  globalThis.addEventListener("pageshow", event => { if (event.persisted) loadNotices(); });
+  loadNotices();
+}
+
 // A small response to changing a view; the interface never depends on GSAP loading.
 export function animateSurface(root) {
   const gsap = globalThis.gsap;
