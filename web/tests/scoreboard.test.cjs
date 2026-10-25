@@ -27,12 +27,10 @@ test('overview cards show the complete skill order beside equipment without inve
   assert.ok(loadout.children.some(node => hasClass(node, 'inventory')));
   const order = walk(loadout).find(node => hasClass(node, 'ability-sequence'));
   assert.equal(walk(order).filter(node => hasClass(node, 'skill-event')).length, 4);
-  const abilities = walk(order).find(node => hasClass(node, 'sequence-abilities'));
-  const talents = walk(order).find(node => hasClass(node, 'sequence-talents'));
-  assert.ok(abilities && talents, 'abilities and talents have separate labelled lanes');
-  assert.equal(walk(abilities).filter(node => hasClass(node, 'skill-event')).length, 3);
-  assert.equal(walk(talents).filter(node => hasClass(node, 'skill-event')).length, 1);
-  assert.ok(walk(talents).some(node => node.title?.includes('запись 2')));
+  const timeline = walk(order).find(node => hasClass(node, 'ability-level-grid'));
+  assert.ok(timeline, 'skills and talents share one hero-level grid');
+  assert.equal(walk(order).filter(node => hasClass(node, 'skill-talent-event')).length, 1);
+  assert.ok(walk(order).some(node => node.title?.includes('запись 2')));
   assert.ok(!walk(root).some(node => hasClass(node, 'selected-player')));
   assert.ok(!walk(root).some(node => node.attrs['aria-controls'] === 'selected-player'));
   assert.ok(!walk(cards[0]).some(node => node.tag === 'button'));

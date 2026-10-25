@@ -28,6 +28,7 @@ func registerWebRoutes(mux *http.ServeMux) {
 		{"/assets/draft.js", "web/assets/draft.js", "text/javascript; charset=utf-8"},
 		{"/assets/scoreboard.js", "web/assets/scoreboard.js", "text/javascript; charset=utf-8"},
 		{"/assets/inventory.js", "web/assets/inventory.js", "text/javascript; charset=utf-8"},
+		{"/assets/ability-levels.js", "web/assets/ability-levels.js", "text/javascript; charset=utf-8"},
 		{"/assets/graphs.js", "web/assets/graphs.js", "text/javascript; charset=utf-8"},
 		{"/assets/items.js", "web/assets/items.js", "text/javascript; charset=utf-8"},
 		{"/assets/match.css", "web/assets/match.css", "text/css; charset=utf-8"},

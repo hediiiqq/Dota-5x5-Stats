@@ -137,33 +137,119 @@ test('match tabs expose only the selected panel and support keyboard navigation'
   assert.deepEqual(changes, ['overview', 'purchases', 'skills']);
 });
 
-test('skills and talents are displayed in separate lanes without inventing hero levels', async () => {
-  const { renderSkillProgression } = await import('../assets/inventory.js');
-  const root = renderSkillProgression({ players: [{ side: 'radiant', hero_name: 'Axe', ability_upgrades: [5004, 5939, 5004] }] });
-  const normal = walk(root).find(node => node.className === 'skill-lane skill-abilities');
-  const talents = walk(root).find(node => node.className === 'skill-lane skill-talents');
-  assert.equal(walk(normal).filter(node => node.tag === 'button').length, 2);
-  assert.equal(walk(talents).filter(node => node.tag === 'button').length, 1);
-  assert.match(root.textContent, /не уровни героя/);
+test('skills and talents share chronological hero levels with gaps, as in the Spectre reference', async () => {
+  const { renderSkillProgression, renderAbilitySequence } = await import('../assets/inventory.js');
+  const upgrades = [5334,5336,5334,5335,5334,5337,5334,5336,5336,6900,5336,5337,5335,5335,8040,5335,5337,5993,6902];
+  for (const root of [renderSkillProgression({ players: [{ hero_id:67, side:'radiant', ability_upgrades:upgrades }] }), renderAbilitySequence(upgrades, 67)]) {
+    const grid = walk(root).find(node => node.className === 'ability-level-grid');
+    assert.ok(grid);
+    assert.equal(grid.children.length, 30);
+    const entries = walk(grid).filter(node => node.className?.split(' ').includes('skill-event'));
+    assert.deepEqual(entries.map(entry => entry.attrs['data-ability-id']), upgrades.map(String));
+    assert.deepEqual(entries.map(entry => entry.attrs['data-level']), ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','18','20','25']);
+    assert.equal(grid.children[16].attrs['data-level'], '17');
+    assert.equal(grid.children[16].className, 'skill-level-gap');
+    assert.equal(grid.children[9].className, 'skill-event skill-talent-event');
+    assert.equal(grid.children[24].className, 'skill-event skill-talent-event');
+    assert.match(root.textContent, /расчётные/i);
+  }
 });
 
-test('talents use hero-specific unlock levels rather than positions in the upgrade log', async () => {
-  const { renderSkillProgression, renderAbilitySequence } = await import('../assets/inventory.js');
-  const { talentUnlockLevel } = await import('../assets/items.js');
-  const talents = [6997, 1841, 412, 1724, 6138, 6282, 6552, 6998];
-  assert.deepEqual(talents.map((id, index) => talentUnlockLevel(105, id, talents.slice(0, index))), [10,15,20,25,27,28,29,30]);
-  assert.equal(talentUnlockLevel(999, 6997), null);
-  assert.equal(talentUnlockLevel(105, 999999), null);
-  const upgrades = [5601, 879, 5601, 886, 5601, 5599, 5601, 886, 886, 886, 6997, 879, 5599, 879, 879, 1841];
-  for (const root of [renderSkillProgression({ players: [{ hero_id:105, side:'radiant', ability_upgrades:upgrades }] }), renderAbilitySequence(upgrades, 105)]) {
-    const entries = walk(root).filter(node => node.className?.split(' ').includes('skill-talent-event'));
-    assert.deepEqual(entries.map(entry => walk(entry).find(node => node.className === 'skill-event-index').textContent), ['10', '15']);
-    assert.ok(entries[0].title.includes('Доступен с уровня 10'));
-    assert.ok(entries[0].title.includes('запись 11'));
-    const skills = walk(root).filter(node => node.className?.split(' ').includes('skill-event') && !node.className.split(' ').includes('skill-talent-event'));
-    assert.deepEqual(skills.map(entry => walk(entry).find(node => node.className === 'skill-event-index').textContent), Array.from({length:14}, (_, index) => String(index + 1)));
-    assert.ok(skills[10].title.includes('Способность 11'));
-    assert.ok(skills[10].title.includes('запись 12'));
+test('unknown abilities keep their original order without inventing a hero level', async () => {
+  const { renderAbilitySequence } = await import('../assets/inventory.js');
+  const root = renderAbilitySequence([5007,999999,5007], 2);
+  const entries = walk(root).filter(node => node.className?.split(' ').includes('skill-event'));
+  assert.deepEqual(entries.map(entry => entry.attrs['data-ability-id']), ['5007','999999','5007']);
+  assert.equal(entries[1].attrs['data-level'], '?');
+});
+
+test('all talent tiers and their second choices follow levels 10 through 30', async () => {
+  const { renderAbilitySequence } = await import('../assets/inventory.js');
+  const talents = [6997,1841,412,1724,6138,6282,6552,6998];
+  const root = renderAbilitySequence(talents, 105);
+  const entries = walk(root).filter(node => node.className?.split(' ').includes('skill-event'));
+  assert.deepEqual(entries.map(entry => entry.attrs['data-level']), ['10','15','20','25','27','28','29','30']);
+  assert.deepEqual(entries.map(entry => entry.attrs['data-ability-id']), talents.map(String));
+});
+
+test('a delayed talent stays after the preceding skills instead of moving back to its unlock tier', async () => {
+  const { renderAbilitySequence } = await import('../assets/inventory.js');
+  const upgrades = [5601,879,5601,886,5601,5599,5601,886,886,886,6997,879,5599,879,879,1841];
+  const root = renderAbilitySequence(upgrades, 105);
+  const entries = walk(root).filter(node => node.className?.split(' ').includes('skill-event'));
+  assert.deepEqual(entries.map(entry => entry.attrs['data-level']), ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16']);
+  assert.deepEqual(entries.filter(entry => entry.className.includes('skill-talent-event')).map(entry => entry.attrs['data-level']), ['11','16']);
+});
+
+test('unavailable and empty skill histories remain distinct', async () => {
+  const { renderAbilitySequence } = await import('../assets/inventory.js');
+  assert.match(renderAbilitySequence(null, 2).textContent, /недоступна/);
+  assert.match(renderAbilitySequence([], 2).textContent, /Нет записей/);
+});
+
+test('granted and automatic abilities never consume a level or make later skill levels unknown', async () => {
+  const { renderAbilitySequence, renderSkillProgression } = await import('../assets/inventory.js');
+  const upgrades = [5007,419,5008,729,5007,944,5375,5008,5376,5007];
+  for (const root of [renderAbilitySequence(upgrades, 2), renderSkillProgression({players:[{hero_id:2, side:'radiant', ability_upgrades:upgrades}]})]) {
+    const grid = walk(root).find(node => node.className === 'ability-level-grid');
+    const learned = walk(grid).filter(node => node.className?.split(' ').includes('skill-event'));
+    assert.deepEqual(learned.map(entry => entry.attrs['data-ability-id']), ['5007','5008','5007','5008','5007']);
+    assert.deepEqual(learned.map(entry => entry.attrs['data-level']), ['1','2','3','4','5']);
+    const automatic = walk(root).find(node => node.className === 'ability-non-level');
+    const grants = walk(automatic).filter(node => node.className?.split(' ').includes('skill-event'));
+    assert.deepEqual(grants.map(entry => entry.attrs['data-ability-id']), ['419','729','944','5375','5376']);
+    assert.deepEqual(grants.map(entry => entry.attrs['data-source']), ['scepter','shard','scepter','innate','automatic']);
+    assert.ok(grants.every(entry => entry.attrs['data-level'] === '—'));
+  }
+});
+
+test('heroes with more than four ability icons keep every learnable form and share paired ranks', async () => {
+  const { renderAbilitySequence } = await import('../assets/inventory.js');
+  const upgrades = [1498,1499,1500,1502,1503,1501,1504,1506];
+  const root = renderAbilitySequence(upgrades, 145);
+  const grid = walk(root).find(node => node.className === 'ability-level-grid');
+  const entries = walk(grid).filter(node => node.className?.split(' ').includes('skill-event'));
+  assert.deepEqual(entries.map(entry => entry.attrs['data-ability-id']), upgrades.map(String));
+  assert.deepEqual(entries.map(entry => entry.attrs['data-level']), ['1','2','3','4','5','6','7','12']);
+});
+
+test('Wyvern fifth basic rank comes from Edda without consuming a hero level or hiding later skills', async () => {
+  const { renderAbilitySequence } = await import('../assets/inventory.js');
+  for (const id of [5651,5652,5653]) {
+    const root = renderAbilitySequence([id,id,id,id,id,5654], 112);
+    const grid = walk(root).find(node => node.className === 'ability-level-grid');
+    const learned = walk(grid).filter(node => node.className?.split(' ').includes('skill-event'));
+    assert.deepEqual(learned.map(entry => entry.attrs['data-level']), ['1','3','5','7','8']);
+    const bonus = walk(root).find(node => node.attrs['data-source'] === 'eldwurms_edda');
+    assert.ok(bonus);
+    assert.equal(bonus.attrs['data-rank'], '5');
+    assert.equal(bonus.attrs['data-level'], '—');
+    assert.match(bonus.title, /Eldwurm/);
+  }
+  const invalid = renderAbilitySequence([5654,5654,5654,5654], 112);
+  assert.ok(!walk(invalid).some(node => node.attrs['data-source'] === 'eldwurms_edda'), 'the book cannot raise the ultimate');
+});
+
+test('Edda cannot explain a sixth rank or a fifth rank of a second basic ability', async () => {
+  const { renderAbilitySequence } = await import('../assets/inventory.js');
+  const upgrades = [5651,5651,5651,5651,5651,5652,5652,5652,5652,5652];
+  const entries = walk(renderAbilitySequence(upgrades,112)).filter(node => node.className?.split(' ').includes('skill-event'));
+  assert.equal(entries.filter(entry => entry.attrs['data-source'] === 'eldwurms_edda').length,1);
+  assert.equal(entries.at(-1).attrs['data-level'],'?');
+  const sixth = walk(renderAbilitySequence([5651,5651,5651,5651,5651,5651],112)).filter(node => node.className?.split(' ').includes('skill-event'));
+  assert.equal(sixth.at(-1).attrs['data-level'],'?');
+});
+
+test('Tree Throw and Break Tether retain their parent skill identity without advancing the level grid', async () => {
+  const { renderAbilitySequence } = await import('../assets/inventory.js');
+  for (const [hero, parent, action, slug] of [[19,5108,6937,'tiny_tree_grab'],[91,5485,5489,'wisp_tether']]) {
+    const root = renderAbilitySequence([parent,action,parent],hero);
+    const grid = walk(root).find(node => node.className === 'ability-level-grid');
+    const learned = walk(grid).filter(node => node.className?.split(' ').includes('skill-event'));
+    assert.deepEqual(learned.map(entry => entry.attrs['data-level']),['1','3']);
+    const entry = walk(root).find(node => node.attrs['data-ability-id'] === String(action));
+    assert.equal(entry.attrs['data-parent-ability'],slug);
+    assert.equal(entry.attrs['data-level'],'—');
   }
 });
 

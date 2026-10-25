@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/paralin/go-dota2/protocol"
 )
 
 type MatchHandler struct {
@@ -60,6 +61,17 @@ func (h *MatchHandler) GetMatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := dto.ToMatchResponse(internalId, source)
+	metadata, metadataErr := postgres.GetMetadata(ctx, h.DB, matchID)
+	if metadataErr != nil {
+		log.Printf("Прокачка: не удалось прочитать метаданные матча %d: %v", matchID, metadataErr)
+	} else if len(metadata) > 0 {
+		var details protocol.CDOTAMatchMetadataFile
+		if err := json.Unmarshal(metadata, &details); err != nil {
+			log.Printf("Прокачка: не удалось разобрать метаданные матча %d: %v", matchID, err)
+		} else if err := dto.MergeAbilityUpgrades(&response, details); err != nil {
+			log.Printf("Прокачка: некорректные метаданные матча %d: %v", matchID, err)
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(response)

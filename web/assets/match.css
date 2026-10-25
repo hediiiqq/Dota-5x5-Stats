@@ -343,10 +343,10 @@ a.score-avatar:hover { border-color: #c6f24e; }
 .purchase-note { padding: 14px 20px; margin: 0; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; }
 .skill-progression { overflow: hidden; background: #1f1f1f; }
 .skill-progression-scroll { overflow-x: auto; }
-.skill-progression-table { width: 100%; min-width: 850px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.skill-progression-table { width: 100%; min-width: 580px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .skill-progression-table > thead th { background: #313131; padding: 12px 18px; text-align: left; color: #d2d2d2; font-size: 12px; }
 .skill-progression-table > thead th:first-child { width: 200px; }
-.skill-progression-table > thead th:last-child { width: 26%; color: #dcc28c; }
+.skill-progression-table > thead th:last-child { color: #dcc28c; }
 .skill-progression-table td, .skill-progression-table .purchase-player-label { padding-block: 18px; border-bottom: 1px solid #ffffff0b; }
 .skill-progression-table td { padding-inline: 12px; vertical-align: middle; }
 .skill-lane { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -607,7 +607,24 @@ a.score-avatar:hover { border-color: #c6f24e; }
 .ability-sequence .skill-event-icon { width:26px; height:26px; }
 .ability-sequence .skill-event-index { font-size:10px; line-height:1.1; padding-top:2px; }
 .ability-sequence .ability-unavailable { font-size:12px; line-height:1.5; }
-.sequence-lane + .sequence-lane { margin-top:10px; }
+.ability-level-grid { display:grid; grid-template-columns:repeat(10, minmax(0, 1fr)); gap:10px 4px; padding:0; margin:0; list-style:none; }
+.ability-unplaced, .ability-non-level { display:flex; flex-wrap:wrap; gap:5px 4px; padding:0; margin:6px 0 0; list-style:none; }
+.ability-level-grid > .skill-event, .ability-level-grid > .skill-level-gap { display:flex; flex-direction:column; align-items:center; width:100%; min-width:0; text-align:center; }
+.ability-level-grid .skill-event-index { align-self:stretch; padding:2px 0; margin-bottom:4px; background:#303030; color:#dedede; font-size:10px; line-height:1.2; font-variant-numeric:tabular-nums; }
+.ability-level-grid .skill-event-icon { width:100%; height:auto; aspect-ratio:1; max-width:44px; border-radius:0; }
+.skill-level-gap .skill-event-icon { border-color:#3b3b3b; background:#252525; color:#747474; font-size:12px; }
+.ability-level-grid .skill-event:focus-visible, .ability-unplaced .skill-event:focus-visible, .ability-non-level .skill-event:focus-visible { outline:2px solid var(--accent, #c6f24e); outline-offset:2px; }
+.skill-progression-table .ability-sequence { max-width:600px; }
+.skill-progression-table .ability-build-label { display:none; }
+@media (max-width:600px) {
+  .skill-progression-table { min-width:0; display:block; }
+  .skill-progression-table > thead { display:none; }
+  .skill-progression-table > tbody { display:block; }
+  .skill-progression-table tr { display:block; }
+  .skill-progression-table .purchase-player-label { position:static; display:flex; align-items:center; gap:10px; width:auto; min-width:0; max-width:none; padding:12px; border-bottom:0; }
+  .skill-progression-table td { display:block; padding:0 12px 16px; }
+  .skill-progression-table .purchase-team-heading th { display:block; }
+}
 .sequence-label { margin:0 0 5px; color:var(--muted); font-size:11px; }
 .roster-hero-heading { cursor:default; }
 .roster-hero-heading:hover { color:inherit; }

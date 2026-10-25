@@ -1,5 +1,28 @@
 import { element, image, heroBadge, number, requestJSON, showStatus, showLoading, animateSurface } from "./common.js";
 import { itemInfo, itemImageURLs, abilityInfo, talentUnlockLevel } from "./items.js";
+import { ABILITY_LEVEL_RULES, ABILITY_NON_LEVEL_SOURCES, ABILITY_RANK_GROUPS, ABILITY_PARENT_ABILITIES } from "./ability-levels.js";
+
+const EDDA_BASIC_SKILLS = [5651, 5652, 5653];
+
+function isEddaBonus(heroID, abilityID, earlierUpgrades) {
+  if (heroID !== 112 || !EDDA_BASIC_SKILLS.includes(abilityID)) return false;
+  // Edda grants one extra rank to one basic skill; it is not a fifth skill point
+  // at hero level 9. The log does not provide the consumption time.
+  return earlierUpgrades.filter(id => id === abilityID).length === 4 &&
+    !EDDA_BASIC_SKILLS.some(skill => earlierUpgrades.filter(id => id === skill).length > 4);
+}
+
+export function abilityUnlockLevel(abilityID, earlierUpgrades = []) {
+  const name = abilityInfo(abilityID)?.[1];
+  const rule = ABILITY_LEVEL_RULES[name];
+  if (!rule) return null;
+  const group = ABILITY_RANK_GROUPS[name] || name;
+  const rank = 1 + earlierUpgrades.filter(id => {
+    const earlierName = abilityInfo(id)?.[1];
+    return (ABILITY_RANK_GROUPS[earlierName] || earlierName) === group;
+  }).length;
+  return rank <= rule[2] ? rule[0] + (rank - 1) * rule[1] : null;
+}
 
 function itemImage(id, className, size) {
   const [url, ...fallbacks] = itemImageURLs(id);
@@ -169,45 +192,29 @@ export function renderPurchases(match, matchID, signal) {
 
 export function renderSkillProgression(match) {
   const panel = element("section", "panel skill-progression");
-  const heading = element("div", "panel-heading"); heading.append(element("h2", "", "Прокачка способностей"), element("span", "muted small", "Способности и таланты"));
-  panel.append(heading, element("p", "purchase-note muted small", "Под способностями — отдельный порядок их изучения без талантов, не уровни героя. Под талантами — уровень доступности по дереву героя, а не фактический уровень изучения. Неизвестный уровень обозначен знаком ?. Талант и способность могут изучаться на одном уровне."));
-  const scroll = element("div", "skill-progression-scroll"); scroll.tabIndex = 0; scroll.setAttribute("role", "region"); scroll.setAttribute("aria-label", "Прокачка игроков по командам");
+  const heading = element("div", "panel-heading");
+  heading.append(element("h2", "", "Прокачка способностей"), element("span", "muted small", "По уровням героя"));
+  panel.append(heading, element("p", "purchase-note muted small", "Расчётные уровни: порядок изучения совмещён с требованиями способностей и талантов. Точные уровни и сохранённые очки в данных отсутствуют. Пустая ячейка — нет записи; ? — уровень восстановить нельзя."));
+  const scroll = element("div", "skill-progression-scroll");
   const table = element("table", "skill-progression-table");
-  table.append(element("caption", "sr-only", "Способности и таланты игроков в исходном порядке изучения"));
+  table.append(element("caption", "sr-only", "Способности и таланты игроков по расчётным уровням героя"));
   const head = element("thead"), header = element("tr");
-  for (const title of ["Игрок", "Способности", "Таланты"]) { const th = element("th", "", title); th.scope = "col"; header.append(th); }
+  for (const title of ["Игрок", "Порядок прокачки · уровни 1–30"]) {
+    const th = element("th", "", title); th.scope = "col"; header.append(th);
+  }
   head.append(header); table.append(head);
   for (const [side, name] of [["radiant", "Radiant"], ["dire", "Dire"], [null, "Другие игроки"]]) {
     const team = match.players.filter(player => side ? player.side === side : !["radiant", "dire"].includes(player.side));
     if (!team.length) continue;
     const body = element("tbody", `skill-team ${side || "unknown"}`);
-    const divider = element("tr", "purchase-team-heading"), title = element("th", "", name); title.colSpan = 3; title.scope = "rowgroup"; divider.append(title); body.append(divider);
+    const divider = element("tr", "purchase-team-heading"), title = element("th", "", name);
+    title.colSpan = 2; title.scope = "rowgroup"; divider.append(title); body.append(divider);
     for (const player of team) {
       const row = element("tr"), label = element("th", "purchase-player-label"); label.scope = "row";
-      label.append(heroBadge(player), element("span", "purchase-nickname", player.nickname || "Анонимный игрок")); row.append(label);
-      const abilities = element("div", "skill-lane skill-abilities"), talents = element("div", "skill-lane skill-talents");
-      const upgrades = Array.isArray(player.ability_upgrades) ? player.ability_upgrades : [];
-      let abilityStep = 0;
-      upgrades.forEach((id, index) => {
-        const info = abilityInfo(id), talent = Boolean(info?.[1]?.startsWith("special_bonus_"));
-        if (!talent) abilityStep++;
-        const name = info?.[0]?.replace(/\{[^}]+\}/g, "…") || `Способность #${id ?? "?"}`;
-        const entry = element("button", `skill-event${talent ? " skill-talent-event" : ""}`); entry.type = "button";
-        const unlock = talent ? talentUnlockLevel(player.hero_id, id, upgrades.slice(0, index)) : null;
-        entry.title = talent ? `${name} · ${unlock == null ? "Уровень доступности неизвестен" : `Доступен с уровня ${unlock}`} · запись ${index + 1}` : `Способность ${abilityStep}: ${name} · запись ${index + 1}`;
-        entry.setAttribute("aria-label", entry.title);
-        const frame = element("span", "skill-event-icon", talent ? "Т" : Array.from(name)[0]); frame.setAttribute("aria-hidden", "true");
-        const path = talent ? "icons/talents.svg" : info ? `abilities/${info[1]}.png` : null;
-        if (path) { const icon = image(`https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/${path}`, "skill-event-image", "", 36); if (icon) frame.append(icon); }
-        entry.append(frame, element("span", "skill-event-index", talent ? unlock ?? "?" : abilityStep), element("span", "purchase-tooltip", name));
-        (talent ? talents : abilities).append(entry);
-      });
-      for (const lane of [abilities, talents]) {
-        const cell = element("td");
-        if (!lane.children.length) lane.append(element("span", "muted small", !Array.isArray(player.ability_upgrades) ? "История недоступна" : "Нет записей"));
-        cell.append(lane); row.append(cell);
-      }
-      body.append(row);
+      label.append(heroBadge(player), element("span", "purchase-nickname", player.nickname || "Анонимный игрок"));
+      const cell = element("td");
+      cell.append(renderAbilitySequence(player.ability_upgrades, player.hero_id));
+      row.append(label, cell); body.append(row);
     }
     table.append(body);
   }
@@ -518,40 +525,64 @@ export function renderTeamAbilityBuild(players, side) {
 
 export function renderAbilitySequence(upgrades, heroID) {
   const root = element("div", "ability-sequence");
-  root.append(element("p", "ability-build-label", "Порядок изучения"));
+  root.append(element("p", "ability-build-label", "Порядок изучения · расчётные уровни"));
   if (!Array.isArray(upgrades) || !upgrades.length) {
     root.append(element("p", "muted small ability-unavailable", Array.isArray(upgrades) ? "Нет записей о прокачке" : "История прокачки недоступна"));
     return root;
   }
-  const lanes = ["Способности", "Таланты"].map((label, index) => {
-    const lane = element("div", `sequence-lane ${index ? "sequence-talents" : "sequence-abilities"}`);
-    const list = element("ol", "ability-sequence-list");
-    list.setAttribute("aria-label", index ? "Таланты: уровень доступности по дереву героя, не фактический уровень изучения" : "Способности: исходный порядок изучения, не уровни героя");
-    lane.append(element("p", "sequence-label", index ? "Таланты · уровень доступности" : label), list);
-    root.append(lane);
-    return list;
-  });
-  let abilityStep = 0;
+  const grid = element("ol", "ability-level-grid");
+  grid.setAttribute("aria-label", "Способности и таланты по расчётным уровням героя; точные уровни изучения неизвестны");
+  const unplaced = element("ol", "ability-unplaced");
+  unplaced.setAttribute("aria-label", "Записи, для которых уровень восстановить нельзя");
+  const nonLevel = element("ol", "ability-non-level");
+  nonLevel.setAttribute("aria-label", "Способности, не требующие очков прокачки");
+  const sourceLabels = { scepter: "От Aghanim’s Scepter", shard: "От Aghanim’s Shard", innate: "Врождённая способность", automatic: "Автоматическая или вспомогательная способность", eldwurms_edda: "Дополнительный 5-й ранг от Eldwurm’s Edda · точный уровень героя неизвестен" };
+  let nextLevel = 1, uncertain = false;
+  const gap = level => {
+    const cell = element("li", "skill-level-gap"); cell.setAttribute("data-level", level);
+    cell.title = `Уровень ${level}: нет восстановленной записи о прокачке`;
+    cell.setAttribute("aria-label", cell.title);
+    cell.append(element("span", "skill-event-index", level), element("span", "skill-event-icon", "—"));
+    return cell;
+  };
   upgrades.forEach((id, index) => {
     const info = abilityInfo(id), talent = Boolean(info?.[1]?.startsWith("special_bonus_"));
-    if (!talent) abilityStep++;
+    const earlier = upgrades.slice(0, index);
+    const source = isEddaBonus(heroID, id, earlier) ? 'eldwurms_edda' : ABILITY_NON_LEVEL_SOURCES[info?.[1]];
+    const parent = ABILITY_PARENT_ABILITIES[info?.[1]];
+    const unlock = talent ? talentUnlockLevel(heroID, id, earlier) : abilityUnlockLevel(id, earlier);
+    const candidate = unlock == null ? null : Math.max(nextLevel, unlock);
+    if (!source && (candidate == null || candidate > 30)) uncertain = true;
+    const level = source || uncertain ? null : candidate;
+    if (level != null) {
+      while (nextLevel < level) grid.append(gap(nextLevel++));
+      nextLevel = level + 1;
+    }
     const name = info?.[0]?.replace(/\{[^}]+\}/g, "…") || `Способность #${id ?? "?"}`;
     const entry = element("li", `skill-event${talent ? " skill-talent-event" : ""}`);
-    entry.value = talent ? index + 1 : abilityStep;
-    const unlock = talent ? talentUnlockLevel(heroID, id, upgrades.slice(0, index)) : null;
-    entry.title = talent ? `${name} · ${unlock == null ? "Уровень доступности неизвестен" : `Доступен с уровня ${unlock}`} · запись ${index + 1}` : `Способность ${abilityStep}: ${name} · запись ${index + 1}`;
+    entry.setAttribute("data-ability-id", id);
+    entry.setAttribute("data-level", source ? "—" : level ?? "?");
+    if (source) entry.setAttribute("data-source", source);
+    if (parent) entry.setAttribute("data-parent-ability", parent);
+    if (source === 'eldwurms_edda') entry.setAttribute("data-rank", 5);
+    const sourceLabel = parent ? "Вспомогательная кнопка основного скилла" : sourceLabels[source];
+    entry.title = `${name} · ${source ? `${sourceLabel} · без очков прокачки` : level == null ? "Уровень восстановить нельзя" : `Расчётный уровень ${level}`} · запись ${index + 1}`;
     entry.setAttribute("aria-label", entry.title);
+    entry.tabIndex = 0;
     const frame = element("span", "skill-event-icon", talent ? "Т" : Array.from(name)[0]);
     frame.setAttribute("aria-hidden", "true");
     const path = talent ? "icons/talents.svg" : info ? `abilities/${info[1]}.png` : null;
     if (path) {
-      const icon = image(`https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/${path}`, "skill-event-image", "", 28);
+      const icon = image(`https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/${path}`, "skill-event-image", "", 36);
       if (icon) frame.append(icon);
     }
-    entry.append(frame, element("span", "skill-event-index", talent ? unlock ?? "?" : abilityStep));
-    lanes[talent ? 1 : 0].append(entry);
+    entry.append(element("span", "skill-event-index", source === 'eldwurms_edda' ? "5*" : source ? "—" : level ?? "?"), frame);
+    (source ? nonLevel : level == null ? unplaced : grid).append(entry);
   });
-  for (const lane of lanes) if (!lane.children.length) lane.append(element("li", "muted small", "Нет записей"));
+  while (nextLevel <= 30) grid.append(gap(nextLevel++));
+  root.append(grid);
+  if (nonLevel.children.length) root.append(element("p", "muted small", "Без очков прокачки"), nonLevel);
+  if (unplaced.children.length) root.append(element("p", "muted small", "Уровень неизвестен · исходный порядок"), unplaced);
   return root;
 }
 
