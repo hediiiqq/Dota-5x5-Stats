@@ -15,6 +15,7 @@ import (
 )
 
 type SteamAccount struct {
+	ID    string
 	Name  string
 	Login string
 	Pass  string
@@ -54,12 +55,14 @@ func StratzToken() string {
 
 func Load() []SteamAccount {
 	account1 := SteamAccount{
+		ID:    "account1",
 		Name:  "whymiutu",
 		Login: os.Getenv("ACCOUNT1_USERNAME"),
 		Pass:  os.Getenv("ACCOUNT1_PASSWORD"),
 		Token: "ACCOUNT1_TOKEN.txt",
 	}
 	account2 := SteamAccount{
+		ID:    "account2",
 		Name:  "andudu",
 		Login: os.Getenv("ACCOUNT2_USERNAME"),
 		Pass:  os.Getenv("ACCOUNT2_PASSWORD"),

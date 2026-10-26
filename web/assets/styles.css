@@ -1437,6 +1437,50 @@ tbody tr:hover { background:#202020; }
 .admin-panel .admin-primary:hover { background:#d8ff79; border-color:#d8ff79; }
 .admin-feedback { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:20px 0 0; color:var(--muted); font-size:14px; }
 #admin-content { display:grid; gap:24px; }
+.admin-imports { padding:28px; min-width:0; }
+.admin-imports h2 { margin:0; font-size:20px; font-weight:600; letter-spacing:-.02em; }
+.admin-imports h3 { margin:0; font-size:16px; font-weight:600; }
+.import-status { margin:12px 0 24px; font-size:13px; }
+/* Two columns share the available width after one 32px gutter. */
+.import-layout { display:grid; grid-template-columns:minmax(240px,.85fr) minmax(0,1.4fr); gap:32px; align-items:start; }
+.import-form { display:grid; gap:18px; min-width:0; }
+.import-field { display:grid; gap:8px; min-width:0; }
+.import-field label { font-size:14px; }
+.import-field select,.import-field input { width:100%; min-width:0; min-height:44px; padding:10px 12px; font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:6px; }
+.import-field select:focus-visible,.import-field input:focus-visible,.import-job-open:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.import-field input[aria-invalid="true"] { border-color:var(--dire); }
+.import-field p,.import-form > p { margin:0; }
+.import-account-info { font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.import-form .button { justify-self:start; min-height:44px; }
+.import-form :disabled { opacity:.55; cursor:not-allowed; }
+.import-feedback { font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+.import-queue { min-width:0; }
+.import-job-list { margin:12px 0; padding:0; list-style:none; }
+.import-job-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; padding:14px 0; border-bottom:1px solid var(--line); }
+.import-job-row > .small,.import-job-row > p { grid-column:1/-1; margin:0; overflow-wrap:anywhere; }
+.import-job-open { justify-self:start; padding:0; min-height:32px; text-align:left; font:inherit; color:var(--text); background:none; border:0; text-decoration:underline; text-underline-offset:4px; cursor:pointer; overflow-wrap:anywhere; }
+.import-job-open:hover,.import-job-open[aria-pressed="true"] { color:var(--accent); }
+.import-job-state { font-size:13px; align-self:center; }
+.import-state-succeeded { color:var(--accent); }
+.import-state-failed { color:var(--dire); }
+.import-empty { padding:18px 0; font-size:14px; }
+.import-job-detail { margin-top:20px; padding:20px; background:var(--bg); border-radius:8px; overflow-wrap:anywhere; }
+.import-job-detail > p { margin:10px 0 0; }
+.import-job-detail:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.import-counters { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px 20px; margin:20px 0; }
+.import-counters dt { font-size:12px; }
+.import-counters dd { margin:5px 0 0; font-size:20px; font-variant-numeric:tabular-nums; }
+@media (max-width:800px) {
+  .import-layout { grid-template-columns:minmax(0,1fr); gap:28px; }
+}
+@media (max-width:600px) {
+  .admin-imports { padding:20px; }
+  .admin-imports > .admin-access-heading { align-items:stretch; }
+  .admin-imports > .admin-access-heading .button { width:100%; }
+  .import-form .button { width:100%; }
+  .import-counters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .import-job-row { grid-template-columns:minmax(0,1fr); }
+}
 .notices-editor { padding:28px; }
 .notices-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; }
 .notices-heading h2 { margin:0; font-size:20px; font-weight:600; letter-spacing:-.02em; }

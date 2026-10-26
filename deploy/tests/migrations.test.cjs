@@ -68,7 +68,7 @@ after(() => {
 test('applies admin migrations once, preserves data and grants only intended writes', { skip: !enabled }, t => {
   const f = fixture(t);
   migrate(f);
-  assert.equal(query('SELECT count(*) FROM public.app_schema_migrations;', f.database).stdout.trim(), '3');
+  assert.equal(query('SELECT count(*) FROM public.app_schema_migrations;', f.database).stdout.trim(), '4');
   query(`SET ROLE ${role};
     INSERT INTO public.admin_sessions(token_hash, steam_id64, expires_at) VALUES ('test-session', '76561198000000001', now() + interval '15 days');
     INSERT INTO public.admin_login_attempts(state_hash, browser_token_hash, return_to, expires_at) VALUES ('state', 'browser', 'https://example.com/auth/steam/callback', now() + interval '10 minutes');
@@ -81,16 +81,23 @@ test('applies admin migrations once, preserves data and grants only intended wri
   assert.equal(query(`SET ROLE ${role}; SELECT text FROM public.site_notices;`, f.database).stdout.trim().replaceAll('\r\n', '\n'), 'SET\nUpdated notice');
   migrate(f);
   assert.equal(query('SELECT count(*) FROM public.admin_sessions;', f.database).stdout.trim(), '1');
-  assert.equal(query('SELECT count(*) FROM public.app_schema_migrations;', f.database).stdout.trim(), '3');
+  assert.equal(query('SELECT count(*) FROM public.app_schema_migrations;', f.database).stdout.trim(), '4');
   assert.equal(query('SELECT text FROM public.site_notices;', f.database).stdout.trim(), 'Updated notice');
   assert.equal(query(`SELECT has_sequence_privilege('${role}', 'public.site_notices_id_seq', 'USAGE');`, f.database).stdout.trim(), 't');
   assert.equal(query(`SELECT has_table_privilege('${role}', 'public.matches', 'INSERT');`, f.database).stdout.trim(), 'f');
   assert.equal(query(`SELECT has_table_privilege('${role}', 'public.app_schema_migrations', 'UPDATE');`, f.database).stdout.trim(), 'f');
+  for (const table of ['import_accounts', 'gc_sync_state']) {
+    assert.equal(query(`SELECT has_table_privilege('${role}', 'public.${table}', 'SELECT');`, f.database).stdout.trim(), 't');
+    assert.equal(query(`SET ROLE ${role}; SELECT count(*) FROM public.${table};`, f.database).status, 0);
+    for (const privilege of ['INSERT', 'UPDATE', 'DELETE']) {
+      assert.equal(query(`SELECT has_table_privilege('${role}', 'public.${table}', '${privilege}');`, f.database).stdout.trim(), 'f');
+    }
+  }
 });
 
 test('a failing migration rolls back schema, grants and migration history', { skip: !enabled }, t => {
   const f = fixture(t);
-  fs.writeFileSync(path.join(f.directory, 'migrations/008_broken.up.sql'), 'CREATE TABLE public.should_rollback(id int); SELECT 1/0;');
+  fs.writeFileSync(path.join(f.directory, 'migrations/009_broken.up.sql'), 'CREATE TABLE public.should_rollback(id int); SELECT 1/0;');
   const result = migrate(f, true);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /division by zero/);
@@ -104,7 +111,7 @@ test('changing an already applied migration stops the deployment', { skip: !enab
   const result = migrate(f, true);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Applied migration has changed/);
-  assert.equal(query('SELECT count(*) FROM public.app_schema_migrations;', f.database).stdout.trim(), '3');
+  assert.equal(query('SELECT count(*) FROM public.app_schema_migrations;', f.database).stdout.trim(), '4');
 });
 
 test('missing web role rolls back the entire migration batch', { skip: !enabled }, t => {
@@ -139,5 +146,5 @@ test('concurrent runners serialize and both finish without duplicate DDL', { ski
     });
   }
   for (const result of await Promise.all([run(), run()])) assert.equal(result.code, 0, result.stderr);
-  assert.equal(query('SELECT count(*) FROM public.app_schema_migrations;', f.database).stdout.trim(), '3');
+  assert.equal(query('SELECT count(*) FROM public.app_schema_migrations;', f.database).stdout.trim(), '4');
 });

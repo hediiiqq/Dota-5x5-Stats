@@ -41,6 +41,7 @@ function open(handler, noticeHandler = () => ({ status: 200, data: { items: [] }
     sessionStorage: { setItem: (key, value) => writes.push([key, value]) },
     showLoading: node => { node.hidden = false; },
     fetch: async (url, options) => {
+      if (url.includes('/api/admin/import-')) return {status: 404, ok: false, json: async () => ({error: {code: 'not_found'}})};
       const isNotice = url.startsWith('/api/admin/notices');
       (isNotice ? noticeRequests : requests).push({ url, options });
       const result = await (isNotice ? noticeHandler : handler)(url, options);
@@ -155,7 +156,7 @@ test('logout failure never claims success and lets the user recheck the session'
   await page.logoutAdmin(false);
   assert.match(page.root.textContent, /Не удалось подтвердить выход/);
   assert.ok(page.session());
-  assert.ok(page.root.querySelectorAll('button').every(button => !button.disabled));
+  assert.ok(page.root.querySelector('.admin-access').querySelectorAll('button').every(button => !button.disabled));
   assert.ok(page.root.querySelectorAll('button').some(button => button.textContent === 'Обновить состояние'));
 });
 

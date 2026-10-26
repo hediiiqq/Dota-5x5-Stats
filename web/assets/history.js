@@ -143,6 +143,7 @@ async function load() {
 addEventListener("pagehide", () => {
   controller?.abort();
   if (view === "admin") {
+    stopAdminImports();
     adminSession = null;
     adminNotices = null;
     adminBusy = false;
@@ -609,6 +610,7 @@ async function loadStats() {
 let adminSession = null;
 let adminBusy = false;
 let adminNotices = null;
+let adminImports = null;
 
 function adminButton(label, action, className = "button") {
   const button = element("button", className, label);
@@ -618,6 +620,7 @@ function adminButton(label, action, className = "button") {
 }
 
 function adminMessage(title, description, { login = false, retry = false } = {}) {
+  stopAdminImports();
   adminNotices = null;
   const root = document.querySelector("#admin-content");
   const panel = element("div", "panel admin-access");
@@ -673,7 +676,7 @@ function renderAdminSession(session, message = "") {
   feedback.textContent = message;
   feedback.hidden = !message;
   panel.append(heading, element("p", "muted admin-description", "Вы вошли через разрешённый Steam-аккаунт. Можно завершить текущий вход или отозвать все свои сессии."), details, actions, feedback);
-  root.replaceChildren(createNoticesEditor(), panel);
+  root.replaceChildren(createAdminImports(), createNoticesEditor(), panel);
   root.hidden = false;
 }
 
@@ -690,8 +693,9 @@ async function requestAdmin(url, options = {}, readJSON = !options.method) {
 }
 
 async function loadAdmin(message = "") {
-  if (adminBusy) return;
+  if (adminBusy || adminNotices?.busy || adminImports?.writing) return;
   adminBusy = true;
+  stopAdminImports();
   adminSession = null;
   const root = document.querySelector("#admin-content");
   const status = document.querySelector("#admin-status");
@@ -714,18 +718,23 @@ async function loadAdmin(message = "") {
       adminSession = session;
       renderAdminSession(session, message);
       await loadAdminNotices();
+      if (adminSession) await loadAdminImports();
     }
     status.hidden = true;
   } catch (error) {
     if (controller?.signal.aborted && document.visibilityState === "hidden") return;
     status.hidden = true;
     adminMessage("Не удалось проверить доступ", "Сервер не ответил или вернул неполные данные. Проверьте соединение и повторите попытку.", { retry: true });
-  } finally { adminBusy = false; }
+  } finally {
+    adminBusy = false;
+    if (adminImports) { updateImportControls(adminImports); scheduleAdminImports(adminImports); }
+  }
 }
 
 async function logoutAdmin(all) {
-  if (adminBusy || adminNotices?.busy || !adminSession) return;
+  if (adminBusy || adminNotices?.busy || adminImports?.writing || !adminSession) return;
   adminBusy = true;
+  pauseAdminImports();
   const root = document.querySelector("#admin-content");
   const buttons = root.querySelectorAll("button");
   for (const button of buttons) button.disabled = true;
@@ -754,6 +763,7 @@ async function logoutAdmin(all) {
   } finally {
     adminBusy = false;
     for (const button of buttons) button.disabled = false;
+    if (adminImports) { updateImportControls(adminImports); scheduleAdminImports(adminImports); }
   }
 }
 
@@ -813,15 +823,16 @@ function updateNoticeControls(editor) {
   const size = Array.from((editor.input.value || "").trim()).length;
   editor.counter.textContent = `${size} / 500 символов`;
   editor.input.setAttribute("aria-invalid", String(size > 500));
-  for (const button of document.querySelector("#admin-content").querySelectorAll("button")) button.disabled = editor.busy;
+  for (const button of document.querySelector(".admin-access")?.querySelectorAll("button") || []) button.disabled = editor.busy;
   for (const button of editor.section.querySelectorAll("button")) button.disabled = editor.busy || editor.locked || editor.uncertain;
-  editor.refresh.disabled = editor.busy;
+  editor.refresh.disabled = editor.busy || editor.locked && !!adminImports?.writing;
   editor.refresh.textContent = editor.locked ? "Проверить доступ" : "Обновить список";
   editor.input.disabled = editor.busy || editor.locked;
   editor.save.disabled = editor.busy || editor.locked || !editor.loaded || editor.uncertain || !editor.input.value?.trim() || size > 500;
   editor.save.textContent = editor.editingId ? "Сохранить изменения" : "Опубликовать";
   editor.formTitle.textContent = editor.editingId ? "Изменение плашки" : "Новая плашка";
   editor.cancel.hidden = !editor.editingId;
+  if (adminImports) updateImportControls(adminImports);
 }
 
 function noticeFeedback(editor, text, error = false) {
@@ -982,6 +993,349 @@ async function deleteAdminNotice(id) {
   }
 }
 
+// Import requests own their abort controllers so queue polling cannot cancel
+// a notice write, logout or the session check.
+const importStatuses = { queued: "В очереди", running: "Выполняется", succeeded: "Завершено", failed: "Ошибка" };
+const importStages = { steam_connect: "Подключение к Steam", awaiting_guard: "Подтвердите вход в мобильном приложении Steam", gc_connect: "Подключение к Dota GC", history: "Поиск истории матчей", details: "Загрузка подробностей", saving: "Сохранение матчей" };
+const importConnections = { disconnected: "Не подключён", connecting: "Подключение к Steam", awaiting_guard: "Ожидается подтверждение в мобильном Steam", ready: "Steam/GC подключён", error: "Ошибка подключения" };
+const importMatchID = value => typeof value === "string" && /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= 9223372036854775807n;
+const importDate = value => typeof value === "string" && Number.isFinite(Date.parse(value)) ? date(value) : "—";
+
+function importAccounts(payload) {
+  if (!Array.isArray(payload?.accounts)) throw new Error("invalid_accounts");
+  const ids = new Set();
+  for (const account of payload.accounts) {
+    if (!account || typeof account.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(account.id) || ids.has(account.id) ||
+        typeof account.name !== "string" || !account.name.trim() || !Object.hasOwn(importConnections, account.connection_state) ||
+        ![account.dota_account_id, account.last_checked_match_id, account.active_job_id].every(id => id === null || importMatchID(id))) throw new Error("invalid_account");
+    ids.add(account.id);
+  }
+  return payload.accounts;
+}
+
+function importJob(job) {
+  if (!job || !importMatchID(job.id) || typeof job.account_id !== "string" || typeof job.account_name !== "string" ||
+      !Object.hasOwn(importStatuses, job.status) || !["history", "incremental"].includes(job.mode) ||
+      !(job.mode === "history" ? importMatchID(job.min_match_id) && job.after_match_id === null : importMatchID(job.after_match_id) && job.min_match_id === null)) throw new Error("invalid_job");
+  return job;
+}
+
+function importJobs(payload) {
+  if (!Array.isArray(payload?.jobs) || !(payload.next_before === null || typeof payload.next_before === "string" && payload.next_before.length > 0)) throw new Error("invalid_jobs");
+  const jobs = payload.jobs.map(importJob);
+  if (new Set(jobs.map(job => job.id)).size !== jobs.length) throw new Error("duplicate_jobs");
+  return jobs;
+}
+
+function createAdminImports() {
+  const section = element("section", "panel admin-imports");
+  section.setAttribute("aria-labelledby", "import-title");
+  const heading = element("div", "admin-access-heading");
+  const title = element("h2", "", "Импорт матчей"); title.id = "import-title";
+  const refresh = adminButton("Обновить состояние", () => adminImports?.locked ? loadAdmin() : loadAdminImports(true));
+  heading.append(title, refresh);
+  const status = element("p", "muted import-status", "Загружаем аккаунты и очередь…"); status.setAttribute("role", "status");
+  const layout = element("div", "import-layout");
+  const form = element("form", "import-form");
+  const field = (labelText, control, id) => {
+    const label = element("label", "", labelText); label.htmlFor = id; control.id = id;
+    const wrap = element("div", "import-field"); wrap.append(label, control); return wrap;
+  };
+  const account = element("select"); account.name = "account_id";
+  const accountInfo = element("p", "muted import-account-info"); accountInfo.id = "import-account-info";
+  account.setAttribute("aria-describedby", accountInfo.id);
+  const mode = element("select"); mode.name = "mode";
+  const incremental = element("option", "", "Новые матчи после синхронизации"); incremental.value = "incremental";
+  const history = element("option", "", "История до указанного Match ID"); history.value = "history";
+  mode.append(incremental, history); mode.value = "incremental";
+  const boundary = element("input"); boundary.name = "min_match_id"; boundary.type = "text"; boundary.inputMode = "numeric"; boundary.maxLength = 19; boundary.autocomplete = "off";
+  boundary.setAttribute("aria-describedby", "import-boundary-help");
+  const boundaryField = field("Нижняя граница Dota Match ID", boundary, "import-boundary");
+  const boundaryHelp = element("p", "muted small", "Граничный матч включается. Это ID матча Dota, а не количество игр."); boundaryHelp.id = "import-boundary-help";
+  boundaryField.append(boundaryHelp);
+  const submit = adminButton("Запустить импорт", () => {}, "button admin-primary"); submit.type = "submit";
+  const feedback = element("p", "import-feedback"); feedback.setAttribute("role", "status"); feedback.setAttribute("aria-live", "polite"); feedback.hidden = true;
+  form.append(field("Аккаунт импортера", account, "import-account"), accountInfo, field("Режим импорта", mode, "import-mode"), boundaryField, submit,
+    element("p", "muted small", "Задание продолжит работу после закрытия страницы и выхода из админки."), feedback);
+  const queue = element("div", "import-queue");
+  const queueHeading = element("h3", "", "Очередь заданий");
+  const list = element("ol", "import-job-list"); list.setAttribute("aria-label", "Задания импорта");
+  const more = adminButton("Показать ещё", () => moreAdminImportJobs()); more.hidden = true;
+  const detail = element("section", "import-job-detail"); detail.setAttribute("aria-label", "Подробности задания");
+  detail.append(element("p", "muted", "Выберите задание, чтобы увидеть параметры и результаты."));
+  queue.append(queueHeading, list, more, detail); layout.append(form, queue); section.append(heading, status, layout);
+  const state = adminImports = { section, form, status, refresh, account, accountInfo, mode, incremental, boundary, boundaryField, submit, feedback, list, more, detail,
+    accounts: [], jobs: [], next: null, expanded: false, selectedJob: null, selectedID: null, selection: 0, controllers: new Set(), timer: null,
+    loaded: false, reading: false, writing: false, locked: false, uncertain: false };
+  account.addEventListener("change", () => { updateImportControls(state); });
+  mode.addEventListener("change", () => updateImportControls(state));
+  boundary.addEventListener("input", () => { boundary.removeAttribute("aria-invalid"); updateImportControls(state); });
+  form.addEventListener("submit", event => { event.preventDefault(); submitAdminImport(); });
+  state.visibility = () => {
+    clearTimeout(state.timer); state.timer = null;
+    if (document.visibilityState === "visible" && state === adminImports && !state.locked) loadAdminImports();
+  };
+  document.addEventListener?.("visibilitychange", state.visibility);
+  updateImportControls(state);
+  return section;
+}
+
+function updateImportControls(state) {
+  if (state !== adminImports) return;
+  const account = state.accounts.find(item => item.id === state.account.value);
+  const hasProgress = !!account?.last_checked_match_id;
+  state.incremental.disabled = !hasProgress;
+  if (!hasProgress) state.mode.value = "history";
+  const isHistory = state.mode.value === "history";
+  state.boundaryField.hidden = !isHistory; state.boundary.required = isHistory;
+  const disabled = state.writing || state.locked || !state.loaded;
+  state.account.disabled = disabled || !state.accounts.length;
+  state.mode.disabled = disabled || !account;
+  state.boundary.disabled = disabled || !isHistory;
+  state.submit.disabled = disabled || state.reading || state.uncertain || !account || !!account.active_job_id || adminBusy;
+  state.submit.textContent = state.writing ? "Ставим в очередь…" : "Запустить импорт";
+  state.refresh.disabled = state.reading || state.writing || state.locked && !!adminNotices?.busy;
+  state.refresh.textContent = state.locked ? "Проверить доступ" : "Обновить состояние";
+  state.more.hidden = !state.next; state.more.disabled = state.reading || state.writing || state.locked;
+  state.accountInfo.textContent = account ? `${importConnections[account.connection_state]} · Прогресс: ${account.last_checked_match_id || "неизвестен — укажите границу истории"} · Успешный запуск: ${importDate(account.last_success_at)}${account.active_job_id ? ` · Активное задание #${account.active_job_id}` : ""}` : "Настроенных аккаунтов нет.";
+  if (adminNotices?.locked) adminNotices.refresh.disabled = adminNotices.busy || state.writing;
+}
+
+function importFeedback(state, message, error = false) {
+  state.feedback.textContent = message; state.feedback.hidden = !message;
+  state.feedback.className = error ? "import-feedback notice-error" : "import-feedback";
+}
+
+function pauseAdminImports() {
+  const state = adminImports;
+  if (!state) return;
+  clearTimeout(state.timer); state.timer = null;
+  for (const controller of state.controllers) controller.abort();
+}
+
+function stopAdminImports() {
+  const state = adminImports;
+  if (!state) return;
+  pauseAdminImports();
+  document.removeEventListener?.("visibilitychange", state.visibility);
+  adminImports = null;
+}
+
+function importAccessFailure(response, state) {
+  if (response.status === 401 || response.status === 403 && response.data?.error?.code === "admin_required") {
+    adminSession = null;
+    adminMessage(response.status === 401 ? "Сессия завершена" : "Нет прав администратора", "Войдите через разрешённый Steam-аккаунт, чтобы продолжить.", {login: true, retry: response.status === 403});
+    return true;
+  }
+  if (response.status === 403) {
+    state.locked = true; clearTimeout(state.timer);
+    importFeedback(state, "Сервер отклонил запрос. Нажмите «Проверить доступ» перед повторной отправкой.", true);
+    return true;
+  }
+  return false;
+}
+
+async function requestImport(state, url, options = {}) {
+  const controller = new AbortController(); state.controllers.add(controller);
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(url, {...options, credentials: "same-origin", cache: "no-store", redirect: "error", signal: controller.signal});
+    let data = null;
+    try { data = await response.json(); } catch { /* Missing JSON is validated by the caller. */ }
+    return {status: response.status, ok: response.ok, data};
+  } finally { clearTimeout(timer); state.controllers.delete(controller); }
+}
+
+function scheduleAdminImports(state) {
+  clearTimeout(state.timer); state.timer = null;
+  if (state !== adminImports || !state.loaded || state.locked || adminBusy || !adminSession || document.visibilityState !== "visible") return;
+  state.timer = setTimeout(() => {
+    if (state !== adminImports) return;
+    if (Date.parse(adminSession?.expires_at) <= Date.now()) {
+      adminSession = null; adminMessage("Сессия завершена", "Войдите через Steam, чтобы продолжить.", {login: true}); return;
+    }
+    loadAdminImports();
+  }, 5000);
+}
+
+function renderImportJobs(state) {
+  const focusedID = Array.from(state.list.querySelectorAll("button")).find(button => button === document.activeElement)?.id;
+  state.list.replaceChildren(...state.jobs.map(job => {
+    const row = element("li", "import-job-row");
+    const button = adminButton(`#${job.id} · ${job.account_name}`, () => openAdminImportJob(job.id), "import-job-open");
+    button.id = `import-job-${job.id}`;
+    button.setAttribute("aria-pressed", String(state.selectedID === job.id));
+    row.append(button, element("span", `import-job-state import-state-${job.status}`, importStatuses[job.status]),
+      element("span", "muted small", `${importDate(job.created_at)} · ${job.mode === "history" ? `История от ID ${job.min_match_id}` : `После ID ${job.after_match_id}`}`));
+    if (job.stage) row.append(element("p", "muted small", importStages[job.stage] || "Неизвестная стадия"));
+    if (job.error?.message) row.append(element("p", "notice-error small", job.error.message));
+    return row;
+  }));
+  if (!state.jobs.length) state.list.append(element("li", "muted import-empty", "Заданий пока нет. Выберите аккаунт и запустите импорт."));
+  if (focusedID) state.list.querySelector(`#${focusedID}`)?.focus();
+}
+
+function renderImportDetail(state) {
+  const job = state.selectedJob;
+  if (!job) return;
+  const title = element("h3", "", `Задание #${job.id}`);
+  const parameters = element("p", "muted small", `${job.account_name} · ${job.mode === "history" ? `История от ID ${job.min_match_id}, включая границу` : `Новые матчи после ID ${job.after_match_id}`}`);
+  const status = element("p", `import-job-state import-state-${job.status}`, `${importStatuses[job.status]}${job.stage ? ` · ${importStages[job.stage] || "Неизвестная стадия"}` : ""}`);
+  const counters = element("dl", "import-counters");
+  for (const [key, label] of [["discovered", "Найдено"], ["saved", "Сохранено"], ["existing", "Уже в базе"], ["filtered", "Отфильтровано"], ["failed", "С ошибками"]]) {
+    const pair = element("div"); const value = job.counters?.[key];
+    pair.append(element("dt", "muted", label), element("dd", "", Number.isSafeInteger(value) && value >= 0 ? number(value) : "—")); counters.append(pair);
+  }
+  state.detail.replaceChildren(title, parameters, status, counters,
+    element("p", "muted small", `Создано: ${importDate(job.created_at)} · Начало: ${importDate(job.started_at)} · Завершено: ${importDate(job.finished_at)}`));
+  if (job.error?.message) state.detail.append(element("p", "notice-error", job.error.message));
+}
+
+async function loadAdminImports(manual = false) {
+  const state = adminImports;
+  if (!state || state.reading || state.writing || state.locked || !adminSession) return;
+  state.reading = true; clearTimeout(state.timer); state.timer = null; updateImportControls(state);
+  try {
+    const [accounts, jobs] = await Promise.all([
+      requestImport(state, "/api/admin/import-accounts"), requestImport(state, "/api/admin/import-jobs?limit=20"),
+    ]);
+    if (state !== adminImports) return;
+    if (importAccessFailure(accounts, state) || importAccessFailure(jobs, state)) return;
+    if (!accounts.ok || !jobs.ok) throw new Error("unavailable");
+    const nextAccounts = importAccounts(accounts.data), nextJobs = importJobs(jobs.data);
+    const firstAccounts = !state.accounts.length;
+    state.accounts = nextAccounts;
+    const previous = state.account.value;
+    state.account.replaceChildren(...state.accounts.map(item => { const option = element("option", "", item.name); option.value = item.id; return option; }));
+    state.account.value = state.accounts.some(item => item.id === previous) ? previous : state.accounts[0]?.id || "";
+    if (firstAccounts && state.accounts.find(item => item.id === state.account.value)?.last_checked_match_id) state.mode.value = "incremental";
+    state.jobs = state.expanded ? [...nextJobs, ...state.jobs.filter(job => !nextJobs.some(next => next.id === job.id))] : nextJobs;
+    // Terminal jobs are immutable. Older active jobs may finish while they
+    // are outside the newest page and still need a current server snapshot.
+    const olderActive = state.jobs.filter(job => !nextJobs.some(next => next.id === job.id) && job.id !== state.selectedID && ["queued", "running"].includes(job.status));
+    const olderResponses = await Promise.all(olderActive.map(job => requestImport(state, `/api/admin/import-jobs/${encodeURIComponent(job.id)}`)));
+    if (state !== adminImports) return;
+    for (let index = 0; index < olderResponses.length; index++) {
+      const response = olderResponses[index];
+      if (importAccessFailure(response, state)) return;
+      if (!response.ok) throw new Error("unavailable");
+      const current = importJob(response.data?.job);
+      if (current.id !== olderActive[index].id) throw new Error("wrong_job");
+      state.jobs = state.jobs.map(job => job.id === current.id ? current : job);
+    }
+    if (!state.expanded) state.next = jobs.data.next_before;
+    state.loaded = true;
+    state.status.textContent = "Состояние обновляется каждые 5 секунд, пока эта вкладка открыта.";
+    if (manual && state.uncertain) {
+      state.uncertain = false;
+      importFeedback(state, "Состояние обновлено. Проверьте очередь и активное задание аккаунта перед новым запуском.");
+    }
+    renderImportJobs(state);
+    if (state.selectedID) await openAdminImportJob(state.selectedID, false);
+  } catch {
+    if (state !== adminImports) return;
+    state.loaded = false;
+    state.status.textContent = "Импорт недоступен: сервер не ответил или вернул неполные данные. Нажмите «Обновить состояние». Показанные ранее данные могли устареть.";
+  } finally {
+    state.reading = false;
+    if (state === adminImports) { updateImportControls(state); scheduleAdminImports(state); }
+  }
+}
+
+async function openAdminImportJob(id, focus = true) {
+  const state = adminImports;
+  if (!state || state.locked || !adminSession || !importMatchID(id)) return;
+  state.selectedID = id; const selection = ++state.selection;
+  state.detail.setAttribute("aria-busy", "true");
+  try {
+    const response = await requestImport(state, `/api/admin/import-jobs/${encodeURIComponent(id)}`);
+    if (state !== adminImports || selection !== state.selection || importAccessFailure(response, state)) return;
+    if (!response.ok) throw new Error("unavailable");
+    const job = importJob(response.data?.job);
+    if (job.id !== id) throw new Error("wrong_job");
+    state.selectedJob = job;
+    state.jobs = state.jobs.map(previous => previous.id === job.id ? job : previous);
+    renderImportJobs(state); renderImportDetail(state);
+    if (focus) { state.detail.tabIndex = -1; state.detail.focus(); }
+  } catch {
+    if (state !== adminImports || selection !== state.selection) return;
+    state.selectedJob = null;
+    state.detail.replaceChildren(element("p", "muted", "Не удалось загрузить задание. Повторите запрос."), adminButton("Повторить", () => openAdminImportJob(id)));
+  } finally {
+    if (state === adminImports && selection === state.selection) state.detail.removeAttribute("aria-busy");
+  }
+}
+
+async function moreAdminImportJobs() {
+  const state = adminImports;
+  if (!state || !state.next || state.reading || state.writing || state.locked || !adminSession) return;
+  state.reading = true; clearTimeout(state.timer); updateImportControls(state);
+  try {
+    const response = await requestImport(state, `/api/admin/import-jobs?limit=20&before=${encodeURIComponent(state.next)}`);
+    if (state !== adminImports || importAccessFailure(response, state)) return;
+    if (!response.ok) throw new Error("unavailable");
+    const jobs = importJobs(response.data);
+    state.jobs.push(...jobs.filter(job => !state.jobs.some(old => old.id === job.id)));
+    state.next = response.data.next_before; state.expanded = true; renderImportJobs(state);
+  } catch {
+    if (state === adminImports) importFeedback(state, "Не удалось загрузить следующую страницу заданий. Повторите попытку.", true);
+  } finally {
+    state.reading = false;
+    if (state === adminImports) { updateImportControls(state); scheduleAdminImports(state); }
+  }
+}
+
+async function submitAdminImport() {
+  const state = adminImports;
+  const account = state?.accounts.find(item => item.id === state.account.value);
+  if (!state || !adminSession || adminBusy || state.reading || state.writing || state.locked || state.uncertain || !state.loaded || !account || account.active_job_id) return;
+  const mode = state.mode.value;
+  if (!["incremental", "history"].includes(mode) || mode === "incremental" && !account.last_checked_match_id) return;
+  const body = {account_id: account.id, mode};
+  if (mode === "history") {
+    const boundary = state.boundary.value.trim();
+    if (!importMatchID(boundary)) {
+      state.boundary.setAttribute("aria-invalid", "true"); state.boundary.focus();
+      importFeedback(state, "Укажите положительный целочисленный Dota Match ID не больше 9223372036854775807.", true); return;
+    }
+    body.min_match_id = boundary;
+  }
+  state.writing = true; clearTimeout(state.timer); updateImportControls(state);
+  importFeedback(state, "Ставим задание в очередь…");
+  try {
+    const response = await requestImport(state, "/api/admin/import-jobs", {method: "POST", headers: {"Content-Type": "application/json", "X-CSRF-Token": adminSession.csrf_token}, body: JSON.stringify(body)});
+    if (state !== adminImports || importAccessFailure(response, state)) return;
+    if (response.status === 409) {
+      const code = response.data?.error?.code;
+      if (code === "account_busy" && importMatchID(response.data.active_job_id)) {
+        account.active_job_id = response.data.active_job_id;
+        importFeedback(state, "У аккаунта уже есть активное задание. Открываем его состояние.");
+        await openAdminImportJob(account.active_job_id);
+      } else {
+        if (code === "sync_required") { account.last_checked_match_id = null; state.mode.value = "history"; }
+        importFeedback(state, code === "sync_required" ? "Нет сохранённого прогресса: укажите нижнюю границу истории." : code === "account_not_configured" ? "Проверьте учётные данные аккаунта на сервере." : "Аккаунт требует проверки подключения на сервере. Обновите состояние перед запуском.", true);
+      }
+      return;
+    }
+    if (response.status === 400) { importFeedback(state, "Сервер отклонил параметры импорта. Проверьте аккаунт, режим и Match ID.", true); return; }
+    if (response.status !== 202) throw new Error("unconfirmed");
+    const job = importJob(response.data?.job);
+    if (job.account_id !== account.id || job.mode !== mode || mode === "history" && job.min_match_id !== body.min_match_id) throw new Error("wrong_job");
+    account.active_job_id = job.id; state.jobs = [job, ...state.jobs.filter(old => old.id !== job.id)];
+    state.selectedID = job.id; state.selectedJob = job; ++state.selection;
+    renderImportJobs(state); renderImportDetail(state);
+    importFeedback(state, `Задание #${job.id} поставлено в очередь.`);
+    state.detail.tabIndex = -1; state.detail.focus();
+  } catch {
+    if (state !== adminImports) return;
+    state.uncertain = true;
+    importFeedback(state, "Не удалось подтвердить запуск. Нажмите «Обновить состояние» и проверьте очередь перед повторной отправкой.", true);
+  } finally {
+    state.writing = false;
+    if (state === adminImports) { updateImportControls(state); scheduleAdminImports(state); }
+  }
+}
+
 function start() {
   if (view === "history") load();
   else if (view === "admin") loadAdmin();
@@ -1009,7 +1363,7 @@ if (view !== "history") {
   }
   if (view === "admin") {
     document.querySelector("#admin-panel").hidden = false;
-    document.querySelector("#page-subtitle").textContent = "Плашки сайта и управление доступом.";
+    document.querySelector("#page-subtitle").textContent = "Импорт матчей, плашки сайта и управление доступом.";
     document.querySelector(".source-label").hidden = true;
     document.querySelector(".page-note").textContent = "Доступ к админ-панели проверяется на сервере при каждом запросе.";
   }

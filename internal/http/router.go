@@ -39,6 +39,7 @@ func NewRouter(db *pgxpool.Pool, auth config.AuthConfig) *http.ServeMux {
 	mux.HandleFunc("POST /api/admin/notices", authHandler.CreateNotice)
 	mux.HandleFunc("PUT /api/admin/notices/{id}", authHandler.UpdateNotice)
 	mux.HandleFunc("DELETE /api/admin/notices/{id}", authHandler.DeleteNotice)
+	mux.HandleFunc("GET /api/admin/import-accounts", authHandler.ListImportAccounts)
 
 	methodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "GET, HEAD")
@@ -66,6 +67,7 @@ func NewRouter(db *pgxpool.Pool, auth config.AuthConfig) *http.ServeMux {
 	mux.HandleFunc("/api/admin/logout-all", postMethodNotAllowed)
 	mux.HandleFunc("/auth/steam", methodNotAllowed)
 	mux.HandleFunc("/auth/steam/callback", methodNotAllowed)
+	mux.HandleFunc("/api/admin/import-accounts", methodNotAllowed)
 
 	mux.HandleFunc("/api/notices", methodNotAllowed)
 	mux.HandleFunc("/api/admin/notices", func(w http.ResponseWriter, r *http.Request) {
