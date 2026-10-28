@@ -86,7 +86,7 @@ test('applies admin migrations once, preserves data and grants only intended wri
   assert.equal(query(`SELECT has_sequence_privilege('${role}', 'public.site_notices_id_seq', 'USAGE');`, f.database).stdout.trim(), 't');
   assert.equal(query(`SELECT has_table_privilege('${role}', 'public.matches', 'INSERT');`, f.database).stdout.trim(), 'f');
   assert.equal(query(`SELECT has_table_privilege('${role}', 'public.app_schema_migrations', 'UPDATE');`, f.database).stdout.trim(), 'f');
-  for (const table of ['import_accounts', 'gc_sync_state']) {
+  for (const table of ['import_accounts', 'gc_sync_state', 'import_jobs']) {
     assert.equal(query(`SELECT has_table_privilege('${role}', 'public.${table}', 'SELECT');`, f.database).stdout.trim(), 't');
     assert.equal(query(`SET ROLE ${role}; SELECT count(*) FROM public.${table};`, f.database).status, 0);
     for (const privilege of ['INSERT', 'UPDATE', 'DELETE']) {

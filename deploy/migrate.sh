@@ -84,7 +84,8 @@ TO "$web_role";
 GRANT USAGE ON SEQUENCE public.site_notices_id_seq TO "$web_role";
 GRANT SELECT ON
   public.import_accounts,
-  public.gc_sync_state
+  public.gc_sync_state,
+  public.import_jobs
 TO "$web_role";
 COMMIT;
 SQL

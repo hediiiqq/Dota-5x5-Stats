@@ -34,7 +34,7 @@ func ListImportAccounts(ctx context.Context, db *pgxpool.Pool) ([]*ImportAccount
 	for rows.Next() {
 		notice := &ImportAccount{}
 
-		err := rows.Scan(&notice.Id, &notice.DotaAccountId, &notice.LastCheckedMatchId)
+		err = rows.Scan(&notice.Id, &notice.DotaAccountId, &notice.LastCheckedMatchId)
 		if err != nil {
 			return nil, err
 		}
@@ -42,7 +42,7 @@ func ListImportAccounts(ctx context.Context, db *pgxpool.Pool) ([]*ImportAccount
 		accounts = append(accounts, notice)
 	}
 
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 
