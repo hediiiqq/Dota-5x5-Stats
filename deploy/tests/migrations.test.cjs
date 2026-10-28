@@ -90,9 +90,16 @@ test('applies admin migrations once, preserves data and grants only intended wri
     assert.equal(query(`SELECT has_table_privilege('${role}', 'public.${table}', 'SELECT');`, f.database).stdout.trim(), 't');
     assert.equal(query(`SET ROLE ${role}; SELECT count(*) FROM public.${table};`, f.database).status, 0);
     for (const privilege of ['INSERT', 'UPDATE', 'DELETE']) {
-      assert.equal(query(`SELECT has_table_privilege('${role}', 'public.${table}', '${privilege}');`, f.database).stdout.trim(), 'f');
+      const expected = table === 'import_jobs' && privilege === 'INSERT' ? 't' : 'f';
+      assert.equal(query(`SELECT has_table_privilege('${role}', 'public.${table}', '${privilege}');`, f.database).stdout.trim(), expected);
     }
   }
+  assert.equal(query(`SELECT has_sequence_privilege('${role}', 'public.import_jobs_id_seq', 'USAGE');`, f.database).stdout.trim(), 't');
+  query(`SET ROLE ${role};
+    INSERT INTO public.import_jobs(account_id, account_name, mode, min_match_id)
+    VALUES ('account1', 'Test importer', 'history', 6000000000)
+    RETURNING id;`, f.database);
+  assert.equal(query('SELECT count(*) FROM public.import_jobs;', f.database).stdout.trim(), '1');
 });
 
 test('a failing migration rolls back schema, grants and migration history', { skip: !enabled }, t => {

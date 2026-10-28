@@ -87,6 +87,8 @@ GRANT SELECT ON
   public.gc_sync_state,
   public.import_jobs
 TO "$web_role";
+GRANT INSERT ON public.import_jobs TO "$web_role";
+GRANT USAGE ON SEQUENCE public.import_jobs_id_seq TO "$web_role";
 COMMIT;
 SQL
 }

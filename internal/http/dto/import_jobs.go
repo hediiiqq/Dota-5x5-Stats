@@ -39,3 +39,9 @@ type ImportJobsResponse struct {
 	Jobs       []ImportJob `json:"jobs"`
 	NextBefore *string     `json:"next_before"`
 }
+
+type CreateImportJobRequest struct {
+	AccountId  string  `json:"account_id"`
+	Mode       string  `json:"mode"`
+	MinMatchId *string `json:"min_match_id"`
+}
