@@ -15,6 +15,9 @@ func registerWebRoutes(mux *http.ServeMux) {
 	}{
 		{"/{$}", "web/index.html", "text/html; charset=utf-8"},
 		{"/match", "web/match.html", "text/html; charset=utf-8"},
+		{"/admin/events", "web/admin-events.html", "text/html; charset=utf-8"},
+		{"/assets/admin-events.js", "web/assets/admin-events.js", "text/javascript; charset=utf-8"},
+		{"/assets/admin-events.css", "web/assets/admin-events.css", "text/css; charset=utf-8"},
 		{"/assets/styles.css", "web/assets/styles.css", "text/css; charset=utf-8"},
 		{"/assets/common.js", "web/assets/common.js", "text/javascript; charset=utf-8"},
 		{"/assets/history.js", "web/assets/history.js", "text/javascript; charset=utf-8"},

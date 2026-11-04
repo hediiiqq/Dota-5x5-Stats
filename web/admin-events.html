@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Журнал событий · Dota Stats</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/admin-events.css">
+  <script type="module" src="/assets/admin-events.js"></script>
+</head>
+<body class="history-layout journal-page">
+  <a class="skip-link" href="#main">К содержимому</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Dota Stats — история матчей"><span>DOTA<span class="brand-light"> STATS</span></span></a>
+    <nav class="main-nav" aria-label="Навигация администратора">
+      <a class="nav-link" href="/?view=admin">Администрирование</a>
+      <a class="nav-link active" href="/admin/events" aria-current="page">Журнал событий</a>
+    </nav>
+  </header>
+  <main id="main" class="container">
+    <section class="page-heading journal-heading">
+      <div><h1>Журнал событий</h1><p class="subtitle">Импорт матчей и метаданных. Последние события — сверху.</p></div>
+      <a class="button button-quiet" href="/?view=admin">К управлению импортом</a>
+    </section>
+    <div id="event-journal" aria-label="События заданий импорта"></div>
+    <noscript><p class="notice">Для просмотра журнала включите JavaScript.</p></noscript>
+  </main>
+  <footer class="site-footer container"><span>DOTA STATS</span><span>Журнал администратора</span></footer>
+</body>
+</html>

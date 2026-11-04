@@ -106,12 +106,43 @@ func run(ctx context.Context, db *pgxpool.Pool, process func(context.Context, *p
 		if err != nil {
 			return err
 		}
+		event := &postgres.ImportEvent{JobId: job.Id}
+		if errMessage == nil {
+			event.Level = "info"
+			event.Message = "Задание успешно завершено"
+		} else {
+			event.Level = "error"
+			event.Message = *errMessage
+		}
+		ctxX, cancelX := context.WithTimeout(context.Background(), 5*time.Second)
+
+		eventErr := postgres.CreateImportEvent(ctxX, db, event)
+		cancelX()
+		if eventErr != nil {
+			log.Printf("ошибка создания евента %v", eventErr)
+		}
+
 		log.Printf("Задание %d: выполнение завершено", job.Id)
 
 	}
 }
 
 func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) (resultErr error) {
+
+	event := postgres.ImportEvent{
+		JobId:   job.Id,
+		Level:   "info",
+		Message: "Начата обработка задания",
+	}
+
+	ctxX, cancelX := context.WithTimeout(ctx, 5*time.Second)
+
+	err := postgres.CreateImportEvent(ctxX, db, &event)
+	cancelX()
+	if err != nil {
+		return err
+	}
+
 	report := func(ctx context.Context, p postgres.ImportProgress) error {
 		updateCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()

@@ -669,6 +669,9 @@ function renderAdminSession(session, message = "") {
   const actions = element("div", "admin-actions");
   actions.append(adminButton("Выйти", () => logoutAdmin(false)),
     adminButton("Выйти на всех устройствах", () => logoutAdmin(true), "button button-quiet"));
+  const journal = element("a", "button button-quiet", "Журнал событий");
+  journal.href = "/admin/events";
+  actions.append(journal);
   const feedback = element("p", "admin-feedback");
   feedback.id = "admin-feedback";
   feedback.setAttribute("role", "status");

@@ -43,6 +43,7 @@ func NewRouter(db *pgxpool.Pool, auth config.AuthConfig) *http.ServeMux {
 	mux.HandleFunc("GET /api/admin/import-jobs/{id}", authHandler.GetImportJob)
 	mux.HandleFunc("GET /api/admin/import-jobs", authHandler.ListImportJobs)
 	mux.HandleFunc("POST /api/admin/import-jobs", authHandler.CreateImportJob)
+	mux.HandleFunc("GET /api/admin/import-events", authHandler.ListImportEvents)
 
 	methodNotAllowed := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "GET, HEAD")
@@ -72,6 +73,7 @@ func NewRouter(db *pgxpool.Pool, auth config.AuthConfig) *http.ServeMux {
 	mux.HandleFunc("/auth/steam/callback", methodNotAllowed)
 	mux.HandleFunc("/api/admin/import-accounts", methodNotAllowed)
 	mux.HandleFunc("/api/admin/import-jobs/{id}", methodNotAllowed)
+	mux.HandleFunc("/api/admin/import-events", methodNotAllowed)
 	mux.HandleFunc("/api/admin/import-jobs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "POST, HEAD, GET")
 		handlers.WriteError(w, http.StatusMethodNotAllowed,
