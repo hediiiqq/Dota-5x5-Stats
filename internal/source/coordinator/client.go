@@ -29,7 +29,8 @@ type AccountResult struct {
 
 func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatchID uint64, fullHistory bool,
 	checkMatch func(ctx context.Context, uint65 uint64) (bool, error),
-	loadSyncState func(ctx context.Context, id uint64) (uint64, bool, error)) (AccountResult, error) {
+	loadSyncState func(ctx context.Context, id uint64) (uint64, bool, error),
+	observers ...func(context.Context, Progress) error) (AccountResult, error) {
 
 	historyResult := make(chan AccountResult, 1)
 
@@ -45,6 +46,9 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 	) (string, unified.EAuthSessionGuardType, error) {
 		for _, confirmation := range confirmations {
 			if confirmation.Type == unified.EAuthSessionGuardType_k_EAuthSessionGuardType_DeviceConfirmation {
+				if err := reportProgress(ctx, Progress{Stage: "awaiting_guard"}, observers); err != nil {
+					return "", 0, err
+				}
 				log.Printf("Аккаунт %s: подтвердите вход в мобильном приложении Steam", account.Name)
 				return "", confirmation.Type, nil
 			}
@@ -114,6 +118,9 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 				if event.Result == steamlang.EResult_OK {
 					log.Printf("Аккаунт %s: вход в Steam выполнен", account.Name)
 					loggedIn = true
+					if err := reportProgress(accountCtx, Progress{Stage: "gc_connect"}, observers); err != nil {
+						return AccountResult{}, err
+					}
 					dota.SetPlaying(true)
 					dota.SayHello()
 					log.Printf("Аккаунт %s: отправлено приветствие координатору Dota 2", account.Name)
@@ -162,7 +169,11 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 							log.Printf("Аккаунт: %v,Id: %v ,загрузка истории до нижней границы %v , источник границы - флаг", account.Name, accountId, historyMinID)
 						}
 
-						matchIDs, latestMatchId, complete, err := HistoryDota(accountCtx, dota, &accountId, historyMinID)
+						if err := reportProgress(accountCtx, Progress{Stage: "history"}, observers); err != nil {
+							historyResult <- AccountResult{err: err}
+							return
+						}
+						matchIDs, latestMatchId, complete, err := HistoryDota(accountCtx, dota, &accountId, historyMinID, observers...)
 						if err != nil {
 							log.Printf("Аккаунт %s: не удалось получить историю матчей Dota 2: %v", account.Name, err)
 							historyResult <- AccountResult{err: err}
@@ -170,21 +181,33 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 						}
 
 						hasErrors := !complete
+						if err := reportProgress(accountCtx, Progress{Stage: "details"}, observers); err != nil {
+							historyResult <- AccountResult{err: err}
+							return
+						}
 
 						for _, matchID := range matchIDs {
 							check, err := checkMatch(accountCtx, matchID)
 							if err != nil {
 								log.Printf("Аккаунт %s: матч Dota %d пропущен — не удалось проверить наличие в базе: %v", account.Name, matchID, err)
-								hasErrors = true
-								continue
+								historyResult <- AccountResult{err: err}
+								return
 							}
 							if check == true {
+								if err := reportProgress(accountCtx, Progress{Existing: 1}, observers); err != nil {
+									historyResult <- AccountResult{err: err}
+									return
+								}
 								log.Printf("Аккаунт %s: матч Dota %d уже сохранён; запрос подробностей пропущен", account.Name, matchID)
 								continue
 							}
 							match, err := MatchDetails(accountCtx, dota, matchID)
 							if err != nil {
 								log.Printf("Аккаунт %s: не удалось получить подробности матча Dota %d: %v", account.Name, matchID, err)
+								if reportErr := reportProgress(accountCtx, Progress{Failed: 1}, observers); reportErr != nil {
+									historyResult <- AccountResult{err: reportErr}
+									return
+								}
 								hasErrors = true
 								continue
 							}

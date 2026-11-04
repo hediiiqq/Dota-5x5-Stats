@@ -113,6 +113,7 @@ func ClaimImportJob(ctx context.Context, db *pgxpool.Pool) (*ImportJob, error) {
 	err := db.QueryRow(ctx, `
 UPDATE public.import_jobs
 SET status = 'running',
+	stage = 'steam_connect',
     started_at = now(),
     updated_at = now()
 WHERE id = (

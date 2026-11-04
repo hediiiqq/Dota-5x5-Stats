@@ -32,6 +32,20 @@ func main() {
 		log.Fatalf("Не удалось подключиться к PostgreSQL для импорта: %v", err)
 	}
 	defer db.Close()
+	// Serialize legacy CLI imports with the admin queue worker.
+	lockCtx, cancelLock := context.WithTimeout(context.Background(), 5*time.Second)
+	lock, err := postgres.AcquireImportWorkerLock(lockCtx, db)
+	cancelLock()
+	if err != nil {
+		log.Printf("Импорт не запущен: %v", err)
+		return
+	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = lock.Conn().Close(closeCtx)
+		lock.Release()
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

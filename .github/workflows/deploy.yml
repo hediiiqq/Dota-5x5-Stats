@@ -40,6 +40,8 @@ jobs:
         with:
           node-version: '24'
       - run: go test ./...
+        env:
+          TEST_POSTGRES_URL: postgres://postgres:migration-test-only@127.0.0.1:5432/postgres?sslmode=disable
       - name: Deployment migration integration tests
         env:
           RUN_MIGRATION_TESTS: '1'

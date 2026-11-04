@@ -10,7 +10,7 @@ import (
 	"github.com/paralin/go-dota2/protocol"
 )
 
-func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minAllowedMatchID uint64) ([]uint64, uint64, bool, error) {
+func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minAllowedMatchID uint64, observers ...func(context.Context, Progress) error) ([]uint64, uint64, bool, error) {
 
 	var startAtMatchID uint64
 
@@ -23,6 +23,7 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 	matchIDs := make([]uint64, 0)
 
 	seen := make(map[uint64]bool)
+	discovered := make(map[uint64]bool)
 
 	request := protocol.CMsgDOTAGetPlayerMatchHistory{
 		AccountId:              accountID,
@@ -85,6 +86,7 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 		}
 		log.Printf("Аккаунт с ID %d: обработана страница с курсором %d; минимальный ненулевой ID матча Dota=%d (0 — подходящих ID нет)", *accountID, startAtMatchID, minMatchID)
 
+		pageProgress := Progress{}
 		for idx, match := range answer.Matches {
 
 			if match == nil {
@@ -92,6 +94,14 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 				continue
 			}
 
+			id := match.GetMatchId()
+			if id != 0 && id >= minAllowedMatchID && !discovered[id] {
+				discovered[id] = true
+				pageProgress.Discovered++
+				if match.LobbyType == nil || match.GetLobbyType() != 1 || (match.GetGameMode() != 16 && match.GetGameMode() != 2) {
+					pageProgress.Filtered++
+				}
+			}
 			if match.LobbyType != nil && match.GetLobbyType() == 1 && (match.GetGameMode() == 16 || match.GetGameMode() == 2) {
 				log.Printf("Запись истории с индексом %d соответствует фильтру лобби и режима: режим=%v, ID аккаунта=%d, тип лобби=%d, ID матча Dota=%d; остальные проверки ещё не выполнены", idx, match.GetGameMode(), *accountID, match.GetLobbyType(), match.GetMatchId())
 
@@ -120,6 +130,9 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 
 		}
 
+		if err := reportProgress(ctx, pageProgress, observers); err != nil {
+			return nil, 0, false, err
+		}
 		if minMatchID == 0 {
 			log.Printf("Аккаунт с ID %d: загрузка истории остановлена — на странице нет ненулевых ID матчей Dota", *accountID)
 			break

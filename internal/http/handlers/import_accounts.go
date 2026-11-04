@@ -63,6 +63,21 @@ func (h *AuthHandler) ListImportAccounts(w http.ResponseWriter, r *http.Request)
 		}
 
 		if accountDb := accountsByID[account.ID]; accountDb != nil {
+			item.LastSuccessAt = accountDb.LastSuccessAt
+			if accountDb.ActiveJobId != nil {
+				id := strconv.FormatInt(*accountDb.ActiveJobId, 10)
+				item.ActiveJobId = &id
+			}
+			if accountDb.ActiveStage != nil {
+				switch *accountDb.ActiveStage {
+				case "steam_connect", "gc_connect":
+					item.ConnectionState = "connecting"
+				case "awaiting_guard":
+					item.ConnectionState = "awaiting_guard"
+				case "history", "details":
+					item.ConnectionState = "ready"
+				}
+			}
 			if accountDb.DotaAccountId != nil {
 				id := strconv.FormatUint(uint64(*accountDb.DotaAccountId), 10)
 				item.DotaAccountId = &id

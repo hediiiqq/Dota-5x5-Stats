@@ -31,7 +31,7 @@ cp "$release" "$release.previous"
 sed '/^DOTA_IMAGE=/d' "$release" > "$release.next"
 printf 'DOTA_IMAGE=%s\n' "$image" >> "$release.next"
 mv "$release.next" "$release"
-if compose up -d --no-build --wait --wait-timeout 120 db web proxy \
+if compose up -d --no-build --wait --wait-timeout 120 db web proxy import-worker \
   && compose exec -T proxy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
   && compose exec -T proxy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
   && compose exec -T web wget -q -T 10 -O /dev/null 'http://127.0.0.1:8080/api/matches?limit=1' \
@@ -43,6 +43,13 @@ else
   echo 'Deployment failed; restoring the previous application image' >&2
   cp "$release.previous" "$release.next"
   mv "$release.next" "$release"
+  # The previous image may predate the worker binary. Leave queued jobs intact.
+  compose stop import-worker
   compose up -d --no-build --wait --wait-timeout 120 db web proxy
+  if compose run --rm --no-deps --entrypoint /bin/sh import-worker -c 'test -x /usr/local/bin/import-worker'; then
+    compose up -d --no-build import-worker
+  else
+    echo 'Previous image has no queue worker; queued jobs are preserved' >&2
+  fi
   exit 1
 fi

@@ -3,6 +3,7 @@ package metadata
 import (
 	"bufio"
 	"compress/bzip2"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,6 +17,10 @@ import (
 )
 
 func CheckMetadata(matchId uint64, cluster uint32, replaySalt uint64) ([]byte, error) {
+	return CheckMetadataContext(context.Background(), matchId, cluster, replaySalt)
+}
+
+func CheckMetadataContext(ctx context.Context, matchId uint64, cluster uint32, replaySalt uint64) ([]byte, error) {
 
 	url := "http://replay" + strconv.FormatUint(uint64(cluster), 10) + ".valve.net/570/" + strconv.FormatUint(matchId, 10) + "_" + strconv.FormatUint(replaySalt, 10) + ".meta.bz2"
 
@@ -25,7 +30,11 @@ func CheckMetadata(matchId uint64, cluster uint32, replaySalt uint64) ([]byte, e
 
 	var zipType io.Reader
 
-	resp, err := client.Get(url)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(request)
 	if err != nil {
 		log.Printf("MetadataCheck Error: %s\n", err)
 		return nil, err

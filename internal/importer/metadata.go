@@ -28,7 +28,7 @@ func runMetadata(ctx context.Context, db *pgxpool.Pool, id int64, rawdata *proto
 		return errors.New("нулевой салт")
 	}
 
-	metadataJSON, err := metadata.CheckMetadata(matchId, cluster, uint64(salt))
+	metadataJSON, err := metadata.CheckMetadataContext(ctx, matchId, cluster, uint64(salt))
 
 	if err != nil {
 

@@ -89,6 +89,21 @@ services:
         condition: service_healthy
     logging: *logging
 
+  import-worker:
+    <<: *app
+    entrypoint: [/usr/local/bin/import-worker]
+    working_dir: /state
+    stop_grace_period: 30s
+    environment:
+      GOMEMLIMIT: 384MiB
+      GOMAXPROCS: "1"
+    env_file:
+      - path: ${DOTA_CONFIG_DIR:-/etc/dota-stats}/importer.env
+        format: raw
+    volumes:
+      - steam_tokens:/state
+    mem_limit: 512m
+
   importer:
     <<: *app
     profiles: [import]
