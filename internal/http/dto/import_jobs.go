@@ -1,6 +1,8 @@
 package dto
 
-import "time"
+import (
+	"time"
+)
 
 type ImportJobCounters struct {
 	Discovered int64 `json:"discovered"`

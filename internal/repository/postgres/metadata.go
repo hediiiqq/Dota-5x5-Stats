@@ -47,3 +47,21 @@ func GetMetadata(ctx context.Context, db *pgxpool.Pool, matchid int64) ([]byte, 
 
 	return data, nil
 }
+
+func HasMatchMetadata(ctx context.Context, db *pgxpool.Pool, dotaId uint64) (bool, error) {
+	var exists bool
+
+	err := db.QueryRow(ctx, `
+SELECT EXISTS (
+    SELECT 1
+    FROM public.matches AS m
+    JOIN public.match_metadata AS mm ON mm.match_id = m.id
+    WHERE m.dota_match_id = $1
+)
+`, dotaId).Scan(&exists)
+	if err != nil {
+		log.Printf("PostgreSQL: запрос метадаты матча по Dota Match ID %d не вернул данные: %v", dotaId, err)
+		return exists, err
+	}
+	return exists, nil
+}
