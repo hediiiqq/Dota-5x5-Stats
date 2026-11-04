@@ -56,6 +56,9 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 				continue
 			}
 			log.Printf("Аккаунт с ID %d: загрузка истории остановлена после трёх пустых ответов подряд; курсор=%d", *accountID, startAtMatchID)
+			if err := reportProgress(ctx, Progress{Event: &Event{Level: "warning", Stage: "history", Message: fmt.Sprintf("Обход истории остановлен после трёх пустых ответов подряд. Курсор: %d; запрошенная нижняя граница: %d.", startAtMatchID, minAllowedMatchID)}}, observers); err != nil {
+				return nil, 0, false, err
+			}
 			break
 		}
 		emptyAttempts = 0
@@ -135,6 +138,9 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 		}
 		if minMatchID == 0 {
 			log.Printf("Аккаунт с ID %d: загрузка истории остановлена — на странице нет ненулевых ID матчей Dota", *accountID)
+			if err := reportProgress(ctx, Progress{Event: &Event{Level: "warning", Stage: "history", Message: "Обход истории остановлен: на странице нет записей с ненулевым ID матча."}}, observers); err != nil {
+				return nil, 0, false, err
+			}
 			break
 		}
 		if minMatchID <= minAllowedMatchID {
@@ -144,6 +150,9 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 		}
 		if startAtMatchID != 0 && minMatchID >= startAtMatchID {
 			log.Printf("Аккаунт с ID %d: загрузка истории остановлена — курсор не продвинулся к более старым матчам; текущий курсор=%d, минимальный ID на странице=%d", *accountID, startAtMatchID, minMatchID)
+			if err := reportProgress(ctx, Progress{Event: &Event{Level: "warning", Stage: "history", Message: fmt.Sprintf("Обход истории остановлен: курсор не продвигается. Текущий курсор: %d; минимальный ID на странице: %d.", startAtMatchID, minMatchID)}}, observers); err != nil {
+				return nil, 0, false, err
+			}
 			break
 		} else {
 			startAtMatchID = minMatchID
@@ -154,6 +163,15 @@ func HistoryDota(ctx context.Context, dota *dota2.Dota2, accountID *uint32, minA
 	return matchIDs, latestMatchID, complete, nil
 }
 
+type MatchDetailsError struct {
+	MatchID uint64
+	Result  uint32
+}
+
+func (e *MatchDetailsError) Error() string {
+	return fmt.Sprintf("координатор Dota 2 не вернул объект матча %d; код результата=%d", e.MatchID, e.Result)
+}
+
 func MatchDetails(ctx context.Context, dota *dota2.Dota2, matchID uint64) (*protocol.CMsgDOTAMatch, error) {
 	answer, err := dota.RequestMatchDetails(ctx, matchID)
 	if err != nil {
@@ -161,7 +179,7 @@ func MatchDetails(ctx context.Context, dota *dota2.Dota2, matchID uint64) (*prot
 	}
 
 	if answer.GetMatch() == nil {
-		return nil, fmt.Errorf("координатор Dota 2 не вернул объект матча %d; код результата=%d", matchID, answer.GetResult())
+		return nil, &MatchDetailsError{MatchID: matchID, Result: uint32(answer.GetResult())}
 	}
 
 	return answer.GetMatch(), nil

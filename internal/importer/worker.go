@@ -6,6 +6,7 @@ import (
 	"dota-stats/internal/repository/postgres"
 	"dota-stats/internal/source/coordinator"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -116,6 +117,11 @@ func run(ctx context.Context, db *pgxpool.Pool, process func(context.Context, *p
 		}
 		ctxX, cancelX := context.WithTimeout(context.Background(), 5*time.Second)
 
+		if finished, found, summaryErr := postgres.GetImportJob(ctxX, db, job.Id); summaryErr == nil && found {
+			event.Message += fmt.Sprintf(" Найдено: %d; сохранено: %d; уже в базе: %d; отфильтровано: %d; матчей с ошибками: %d.", finished.Discovered, finished.Saved, finished.Existing, finished.Filtered, finished.Failed)
+		} else if summaryErr != nil {
+			log.Printf("Задание %d: не удалось прочитать итоговые счётчики: %v", job.Id, summaryErr)
+		}
 		eventErr := postgres.CreateImportEvent(ctxX, db, event)
 		cancelX()
 		if eventErr != nil {
@@ -129,10 +135,12 @@ func run(ctx context.Context, db *pgxpool.Pool, process func(context.Context, *p
 
 func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) (resultErr error) {
 
+	stage := "steam_connect"
 	event := postgres.ImportEvent{
 		JobId:   job.Id,
 		Level:   "info",
 		Message: "Начата обработка задания",
+		Stage:   &stage,
 	}
 
 	ctxX, cancelX := context.WithTimeout(ctx, 5*time.Second)
@@ -144,9 +152,7 @@ func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) 
 	}
 
 	report := func(ctx context.Context, p postgres.ImportProgress) error {
-		updateCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		return postgres.AddImportProgress(updateCtx, db, job.Id, p)
+		return recordJobProgress(ctx, db, job.Id, p)
 	}
 
 	accounts := config.Load()
@@ -209,7 +215,17 @@ func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) 
 
 	result, err := coordinator.RunAccount(ctx, selectedAccount, minMatchID, true, checkMatch, loadSyncState,
 		func(ctx context.Context, p coordinator.Progress) error {
-			return report(ctx, postgres.ImportProgress{Stage: p.Stage, Discovered: p.Discovered, Existing: p.Existing, Filtered: p.Filtered, Failed: p.Failed})
+			if err := report(ctx, postgres.ImportProgress{Stage: p.Stage, Discovered: p.Discovered, Existing: p.Existing, Filtered: p.Filtered, Failed: p.Failed}); err != nil {
+				return err
+			}
+			if p.Event != nil {
+				event := postgres.ImportEvent{Level: p.Event.Level, Stage: &p.Event.Stage, Message: p.Event.Message}
+				if p.Event.MatchID != 0 {
+					event.DotaMatchId = &p.Event.MatchID
+				}
+				recordJobEvent(ctx, db, job.Id, event)
+			}
+			return nil
 		})
 	if err != nil {
 		return err
@@ -221,9 +237,7 @@ func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) 
 func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob, result coordinator.AccountResult,
 	loadMetadata func(context.Context, *pgxpool.Pool, int64, *protocol.CMsgDOTAMatch) error) (resultErr error) {
 	report := func(ctx context.Context, p postgres.ImportProgress) error {
-		updateCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		return postgres.AddImportProgress(updateCtx, db, job.Id, p)
+		return recordJobProgress(ctx, db, job.Id, p)
 	}
 
 	var failedMatches int64
@@ -248,6 +262,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 
 		if match == nil {
 			log.Print("Импорт пропущен: объект матча отсутствует")
+			recordMatchProblem(ctx, db, job.Id, "saving", 0, "Матч не сохранён: отсутствует объект матча.")
 			savefailed = true
 			failedMatches++
 			continue
@@ -255,6 +270,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 
 		if match.MatchId == nil {
 			log.Print("Импорт пропущен: в данных матча отсутствует ID Dota")
+			recordMatchProblem(ctx, db, job.Id, "saving", 0, "Матч не сохранён: отсутствует Dota Match ID.")
 			savefailed = true
 			failedMatches++
 			continue
@@ -262,6 +278,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 
 		if match.Starttime == nil {
 			log.Printf("Матч Dota %d пропущен: отсутствует время начала", match.GetMatchId())
+			recordMatchProblem(ctx, db, job.Id, "saving", match.GetMatchId(), "Матч не сохранён: отсутствует время начала.")
 			savefailed = true
 			failedMatches++
 			continue
@@ -269,6 +286,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 
 		if match.Duration == nil {
 			log.Printf("Матч Dota %d пропущен: отсутствует длительность", match.GetMatchId())
+			recordMatchProblem(ctx, db, job.Id, "saving", match.GetMatchId(), "Матч не сохранён: отсутствует длительность.")
 			savefailed = true
 			failedMatches++
 			continue
@@ -276,6 +294,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 
 		if match.GameMode == nil {
 			log.Printf("Матч Dota %d пропущен: отсутствует режим игры", match.GetMatchId())
+			recordMatchProblem(ctx, db, job.Id, "saving", match.GetMatchId(), "Матч не сохранён: отсутствует режим игры.")
 			savefailed = true
 			failedMatches++
 			continue
@@ -283,6 +302,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 
 		if match.LobbyType == nil {
 			log.Printf("Матч Dota %d пропущен: отсутствует тип лобби", match.GetMatchId())
+			recordMatchProblem(ctx, db, job.Id, "saving", match.GetMatchId(), "Матч не сохранён: отсутствует тип лобби.")
 			savefailed = true
 			failedMatches++
 			continue
@@ -290,6 +310,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 
 		if match.GetMatchId() == 0 {
 			log.Print("Импорт пропущен: ID матча Dota равен нулю")
+			recordMatchProblem(ctx, db, job.Id, "saving", 0, "Матч не сохранён: Dota Match ID равен нулю.")
 			savefailed = true
 			failedMatches++
 			continue
@@ -304,12 +325,14 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 		}
 
 		var invalidPlayers bool = false
+		var invalidReason string
 
 		accId := make(map[uint32]bool)
 
 		for _, player := range match.GetPlayers() {
 
 			if player == nil {
+				invalidReason = "В составе отсутствует объект игрока."
 				log.Printf("Матч Dota %d: в списке игроков обнаружен отсутствующий объект", match.GetMatchId())
 				invalidPlayers = true
 				savefailed = true
@@ -318,6 +341,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 			}
 
 			if player.AccountId == nil {
+				invalidReason = "У игрока отсутствует ID аккаунта."
 				log.Printf("Матч Dota %d: у игрока %q отсутствует ID аккаунта", match.GetMatchId(), player.GetPlayerName())
 				invalidPlayers = true
 				savefailed = true
@@ -326,6 +350,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 			}
 
 			if player.GetAccountId() == 0 {
+				invalidReason = "ID аккаунта игрока равен нулю."
 				log.Printf("Матч Dota %d: у игрока %q ID аккаунта равен нулю", match.GetMatchId(), player.GetPlayerName())
 				invalidPlayers = true
 				savefailed = true
@@ -334,6 +359,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 			}
 
 			if player.TeamNumber == nil {
+				invalidReason = "У игрока отсутствует номер стороны."
 				log.Printf("Матч Dota %d: у игрока с ID аккаунта %d отсутствует номер стороны", match.GetMatchId(), player.GetAccountId())
 				invalidPlayers = true
 				savefailed = true
@@ -342,6 +368,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 			}
 
 			if *player.TeamNumber != 0 && *player.TeamNumber != 1 {
+				invalidReason = "У игрока некорректный номер стороны."
 				log.Printf("Матч Dota %d: у игрока с ID аккаунта %d неверный номер стороны %d; допустимы 0 и 1", match.GetMatchId(), player.GetAccountId(), player.GetTeamNumber())
 				invalidPlayers = true
 				savefailed = true
@@ -350,6 +377,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 			}
 
 			if accId[player.GetAccountId()] {
+				invalidReason = "ID аккаунта повторяется в составе игроков."
 				log.Printf("Матч Dota %d: ID аккаунта %d повторяется в составе игроков", match.GetMatchId(), player.GetAccountId())
 				invalidPlayers = true
 				savefailed = true
@@ -362,12 +390,14 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 
 		if invalidPlayers {
 			log.Printf("Матч Dota %d пропущен: некорректный состав игроков", match.GetMatchId())
+			recordMatchProblem(ctx, db, job.Id, "saving", match.GetMatchId(), "Матч не сохранён. "+invalidReason)
 			continue
 		}
 
 		id, inserted, err1 := postgres.SaveMatchWithPlayers(ctx, db, match)
 		if err1 != nil {
 			log.Printf("Ошибка сохранения матча:%v , статус: %v, ошибка: %v", match.GetMatchId(), inserted, err1)
+			recordMatchProblem(ctx, db, job.Id, "saving", match.GetMatchId(), "Не удалось сохранить матч. "+eventFailureReason(err1))
 			savefailed = true
 			failedMatches++
 			continue
@@ -403,6 +433,7 @@ func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJo
 				return ctx.Err()
 			}
 			log.Printf("Задание %d: метаданные матча %d не загружены: %v", job.Id, match.GetMatchId(), err)
+			recordMatchProblem(ctx, db, job.Id, "metadata", match.GetMatchId(), "Не удалось загрузить или сохранить метаданные. "+eventFailureReason(err))
 			savefailed = true
 			failedMatches++
 			continue

@@ -213,7 +213,7 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 								if firstFailedMatchID == 0 {
 									firstFailedMatchID = matchID
 								}
-								if reportErr := reportProgress(accountCtx, Progress{Failed: 1}, observers); reportErr != nil {
+								if reportErr := reportProgress(accountCtx, detailsFailureProgress(matchID, err), observers); reportErr != nil {
 									historyResult <- AccountResult{err: reportErr}
 									return
 								}

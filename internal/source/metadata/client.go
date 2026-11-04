@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -15,6 +16,12 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/paralin/go-dota2/protocol"
 )
+
+type HTTPStatusError struct{ StatusCode int }
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("сервер метаданных ответил HTTP %d", e.StatusCode)
+}
 
 func CheckMetadata(matchId uint64, cluster uint32, replaySalt uint64) ([]byte, error) {
 	return CheckMetadataContext(context.Background(), matchId, cluster, replaySalt)
@@ -48,7 +55,7 @@ func CheckMetadataContext(ctx context.Context, matchId uint64, cluster uint32, r
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("MetadataCheck Bad status: %s для id: %v\n", resp.Status, matchId)
-		return nil, errors.New("cервер ответил bad status для id ")
+		return nil, &HTTPStatusError{StatusCode: resp.StatusCode}
 	}
 
 	log.Printf("metedata return :%v", resp)
