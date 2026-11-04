@@ -5,7 +5,8 @@ const path = require('node:path');
 const {runInNewContext} = require('node:vm');
 
 class Element {
-  constructor(tag='div'){this.tag=tag;this.children=[];this.events={};this.attrs={};this.hidden=false;}
+  constructor(tag='div'){this.tag=tag;this.children=[];this.events={};this.attrs={};this.hidden=false;this.scrollTop=0;this.clientHeight=90;}
+  get scrollHeight(){return this.querySelectorAll('.journal-line').length*90;}
   append(...nodes){this.children.push(...nodes);}
   replaceChildren(...nodes){this.children=nodes;this.text='';}
   set textContent(value){this.text=String(value);this.children=[];}
@@ -47,10 +48,10 @@ test('events are read only after admin session, IDs remain exact and text is pla
 test('pagination appends older events and pauses refresh until returning to latest',async()=>{
   const page=fixture(url=>url.includes('import-events')?ok(url.includes('before=')?{events:[event('9007199254740998')],next_before:null}:{events:[event('9007199254740999')],next_before:'9007199254740999'}):null);
   await page.journal.start();await page.journal.more();
-  assert.equal(page.root.querySelectorAll('tbody')[0].children.length,2);
+  assert.equal(page.root.querySelector('.journal-lines').children.length,2);
   assert.ok(page.requests.some(r=>r.url.includes('before=9007199254740999')));
   assert.equal([...page.timers.values()].some(v=>v.ms===5000),false);
-  await page.journal.refresh();assert.equal(page.root.querySelectorAll('tbody')[0].children.length,1);
+  await page.journal.refresh();assert.equal(page.root.querySelector('.journal-lines').children.length,1);
   assert.equal([...page.timers.values()].some(v=>v.ms===5000),true);
 });
 
@@ -82,4 +83,27 @@ test('hidden tab stops polling and late responses cannot restore rows after leav
   hold=true;const request=page.journal.refresh();await settle();page.journal.stop();
   pending(ok({events:[event('4',{message:'late-private-event'})],next_before:null}));await request;
   assert.doesNotMatch(page.root.textContent,/late-private-event/);
+});
+
+test('console renders older events first and follows the newest line',async()=>{
+  const page=fixture(url=>url.includes('import-events')?ok({events:[event('3',{message:'newest-line'}),event('2',{message:'middle-line'}),event('1',{message:'oldest-line'})],next_before:null}):null);
+  await page.journal.start();
+  const lines=page.root.querySelector('.journal-lines').children;
+  assert.match(lines[0].textContent,/oldest-line/);assert.match(lines[2].textContent,/newest-line/);
+  const output=page.root.querySelector('.journal-console');
+  assert.equal(output.scrollTop,output.scrollHeight);
+});
+
+test('scrolling up pauses output; following resumes it without a jump while reading',async()=>{
+  const page=fixture(url=>url.includes('import-events')?ok({events:[event('3'),event('2'),event('1')],next_before:null}):null);
+  await page.journal.start();
+  const output=page.root.querySelector('.journal-console');
+  const follow=page.root.querySelector('.journal-follow');
+  output.scrollTop=0;output.events.scroll();
+  assert.equal(follow.checked,false);
+  assert.equal([...page.timers.values()].some(v=>v.ms===5000),false);
+  assert.match(page.root.textContent,/пауз/);
+  follow.checked=true;follow.events.change();
+  assert.equal(output.scrollTop,output.scrollHeight);
+  assert.equal([...page.timers.values()].some(v=>v.ms===5000),true);
 });

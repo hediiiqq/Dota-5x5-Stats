@@ -3,6 +3,8 @@ import {element, matchID} from "./common.js";
 const levels = {info:"Информация", warning:"Предупреждение", error:"Ошибка"};
 const stages = {steam_connect:"Подключение к Steam", awaiting_guard:"Подтверждение Steam Guard", gc_connect:"Подключение к Dota 2", history:"История матчей", details:"Подробности матчей", saving:"Сохранение матчей", metadata:"Метаданные"};
 const eventTime = new Intl.DateTimeFormat("ru-RU", {day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit"});
+const consoleTime = new Intl.DateTimeFormat("ru-RU", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit"});
+const levelTags = {info:"INFO", warning:"WARN", error:"ERROR"};
 
 export function validateEventsPage(payload, before = null) {
   if (!payload || !Array.isArray(payload.events) || payload.events.length > 20 ||
@@ -37,34 +39,35 @@ export function createEventJournal(root) {
   content.hidden = true;
   const tools = element("div", "journal-tools");
   const controls = element("div", "journal-controls");
-  const refreshButton = element("button", "button button-quiet", "Обновить журнал");
+  const refreshButton = element("button", "button button-quiet", "К последним событиям");
   refreshButton.type = "button";
   const auto = element("input");
   auto.type = "checkbox"; auto.checked = true;
   const autoLabel = element("label", "journal-auto");
   autoLabel.append(auto, element("span", "", "Обновлять каждые 5 секунд"));
-  controls.append(refreshButton, autoLabel);
+  const follow = element("input", "journal-follow");
+  follow.type = "checkbox"; follow.checked = true;
+  const followLabel = element("label", "journal-auto");
+  followLabel.append(follow, element("span", "", "Следить за выводом"));
+  controls.append(refreshButton, autoLabel, followLabel);
   const count = element("span", "journal-count");
   tools.append(controls, count);
   const feedback = element("p", "journal-feedback");
   feedback.setAttribute("role", "status"); feedback.setAttribute("aria-live", "polite");
-  const table = element("table", "journal-table");
-  const caption = element("caption", "journal-caption", "События импорта: новые сверху. Время по вашему устройству.");
-  const head = element("thead");
-  const headRow = element("tr");
-  for (const title of ["Время", "Уровень", "Задание", "Dota Match ID", "Событие"]) {
-    const th = element("th", "", title); th.scope = "col"; headRow.append(th);
-  }
-  head.append(headRow);
-  const body = element("tbody");
-  table.append(caption, head, body);
+  const output = element("div", "journal-console");
+  output.tabIndex = 0;
+  output.setAttribute("role", "region");
+  output.setAttribute("aria-label", "Консоль событий импорта. Новые строки снизу.");
+  const body = element("ol", "journal-lines");
+  body.setAttribute("aria-label", "События в порядке поступления");
   const empty = element("p", "journal-empty", "Событий пока нет. Они появятся после запуска задания импорта.");
   empty.hidden = true;
   const footer = element("div", "journal-footer");
   const moreButton = element("button", "button button-quiet", "Показать более старые");
   moreButton.type = "button"; moreButton.hidden = true;
   footer.append(moreButton);
-  content.append(tools, feedback, table, empty, footer);
+  output.append(body, empty);
+  content.append(tools, feedback, footer, output);
   root.replaceChildren(access, content);
 
   let authorized = false, busy = false, stopped = false, olderLoaded = false;
@@ -72,8 +75,8 @@ export function createEventJournal(root) {
   function pause() { clearTimeout(timer); timer = null; }
   function schedule() {
     pause();
-    if (authorized && !stopped && !busy && auto.checked && !olderLoaded && document.visibilityState !== "hidden") {
-      timer = setTimeout(() => refresh(), 5000);
+    if (authorized && !stopped && !busy && auto.checked && follow.checked && !olderLoaded && document.visibilityState !== "hidden") {
+      timer = setTimeout(() => load(), 5000);
     }
   }
   function updateControls() {
@@ -92,23 +95,28 @@ export function createEventJournal(root) {
     accessDescription.textContent = status === 403 ? "Вашему Steam-аккаунту не разрешён просмотр журнала." : "Войдите в админку через Steam и вернитесь в журнал событий.";
   }
   function render() {
-    body.replaceChildren(...events.map(event => {
-      const row = element("tr");
-      const timeCell = element("td");
-      const time = element("time", "", eventTime.format(new Date(event.created_at)));
-      time.dateTime = event.created_at; timeCell.append(time);
-      const level = element("td");
-      level.append(element("span", `journal-level journal-level-${event.level}`, levels[event.level]));
-      const job = element("td", "journal-id", `#${event.job_id}`);
-      const match = element("td", "journal-id", event.dota_match_id ?? "—");
-      const details = element("td");
-      details.append(element("p", "journal-message", event.message));
-      if (event.stage) details.append(element("span", "journal-stage", stages[event.stage] || event.stage));
-      row.append(timeCell, level, job, match, details);
+    const previousHeight = output.scrollHeight, previousTop = output.scrollTop;
+    body.replaceChildren(...[...events].reverse().map(event => {
+      const row = element("li", "journal-line");
+      const time = element("time", "journal-time", consoleTime.format(new Date(event.created_at)));
+      time.dateTime = event.created_at;
+      time.title = eventTime.format(new Date(event.created_at));
+      time.setAttribute("aria-label", time.title);
+      const level = element("span", `journal-level journal-level-${event.level}`, levelTags[event.level]);
+      level.title = levels[event.level];
+      level.setAttribute("aria-label", levels[event.level]);
+      const details = element("div", "journal-message");
+      let context = `[задание #${event.job_id}]`;
+      if (event.dota_match_id) context += ` [матч ${event.dota_match_id}]`;
+      if (event.stage) context += ` [${stages[event.stage] || event.stage}]`;
+      details.append(element("span", "journal-context", `${context} `), element("span", "", event.message));
+      row.append(time, level, details);
       return row;
     }));
-    count.textContent = `Показано событий: ${events.length}`;
-    empty.hidden = events.length > 0; table.hidden = !events.length;
+    count.textContent = `Строк: ${events.length}`;
+    empty.hidden = events.length > 0;
+    if (olderLoaded) output.scrollTop = previousTop + output.scrollHeight - previousHeight;
+    else if (follow.checked) output.scrollTop = output.scrollHeight;
     updateControls();
   }
   async function request(url) {
@@ -135,11 +143,12 @@ export function createEventJournal(root) {
       const page = validateEventsPage(response.data, before);
       events = append ? [...events, ...page.events] : page.events;
       nextBefore = page.nextBefore; olderLoaded = append;
+      if (append) follow.checked = false;
       render();
-      message(append ? "Просмотр истории. Нажмите «Обновить журнал», чтобы вернуться к последним событиям." : `Обновлено в ${new Date().toLocaleTimeString("ru-RU")}. Время событий — по вашему устройству.`);
+      message(append ? "Просмотр истории: вывод на паузе. Нажмите «К последним событиям», чтобы продолжить." : `Обновлено в ${new Date().toLocaleTimeString("ru-RU")}. Время — по вашему устройству.`);
     } catch {
       if (ticket !== generation || stopped) return;
-      message(append ? "Не удалось загрузить старые события. Повторите запрос кнопкой ниже." : "Не удалось обновить журнал. Нажмите «Обновить журнал», чтобы повторить." , true);
+      message(append ? "Не удалось загрузить старые события. Повторите запрос кнопкой над консолью." : "Не удалось обновить консоль. Нажмите «К последним событиям», чтобы повторить." , true);
     } finally {
       if (ticket === generation) { busy = false; updateControls(); schedule(); }
     }
@@ -149,6 +158,7 @@ export function createEventJournal(root) {
     stopped = false; pause(); busy = true; authorized = false;
     const ticket = ++generation;
     body.replaceChildren(); events = []; nextBefore = null; olderLoaded = false;
+    follow.checked = true;
     content.hidden = true; access.hidden = false; accessTitle.textContent = "Проверяем доступ…";
     retry.disabled = true;
     try {
@@ -170,15 +180,30 @@ export function createEventJournal(root) {
     stopped = true; authorized = false; generation++; pause(); current?.abort(); busy = false;
     events = []; nextBefore = null; body.replaceChildren(); content.hidden = true;
   }
-  const refresh = () => load(false);
+  const refresh = () => { follow.checked = true; return load(false); };
   const more = () => load(true);
   refreshButton.addEventListener("click", refresh);
   moreButton.addEventListener("click", more);
   retry.addEventListener("click", start);
   auto.addEventListener("change", schedule);
+  follow.addEventListener("change", () => {
+    if (follow.checked) {
+      if (olderLoaded) { refresh(); return; }
+      output.scrollTop = output.scrollHeight;
+      message("Слежение за выводом включено."); schedule();
+    } else {
+      pause(); message("Вывод на паузе. Включите «Следить за выводом», чтобы продолжить.");
+    }
+  });
+  output.addEventListener("scroll", () => {
+    if (follow.checked && output.scrollHeight - output.scrollTop - output.clientHeight > 24) {
+      follow.checked = false; pause();
+      message("Вывод на паузе: можно читать предыдущие строки. Включите «Следить за выводом», чтобы продолжить.");
+    }
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") { pause(); return; }
-    if (authorized && !olderLoaded && !busy) refresh();
+    if (authorized && follow.checked && !olderLoaded && !busy) load();
   });
   globalThis.addEventListener("pagehide", stop);
   globalThis.addEventListener("pageshow", event => { if (event.persisted) start(); });
