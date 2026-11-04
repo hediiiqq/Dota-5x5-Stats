@@ -6,11 +6,11 @@ import (
 	"dota-stats/internal/repository/postgres"
 	"dota-stats/internal/source/coordinator"
 	"errors"
-	"fmt"
 	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/paralin/go-dota2/protocol"
 )
 
 func Run(ctx context.Context, db *pgxpool.Pool) error {
@@ -93,8 +93,7 @@ func run(ctx context.Context, db *pgxpool.Pool, process func(context.Context, *p
 		err = process(ctx, db, job)
 		if err != nil {
 			log.Printf("Задание %d: %v", job.Id, err)
-			message := "Не удалось завершить импорт. Подробности в журнале исполнителя."
-			code := "import_failed"
+			code, message := publicJobError(err)
 
 			errMessage = &message
 			errCode = &code
@@ -185,8 +184,15 @@ func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) 
 		return err
 	}
 
-	if result.HasError {
-		return errors.New("история матчей загружена не полностью")
+	return processResult(ctx, db, job, result, runMetadata)
+}
+
+func processResult(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob, result coordinator.AccountResult,
+	loadMetadata func(context.Context, *pgxpool.Pool, int64, *protocol.CMsgDOTAMatch) error) (resultErr error) {
+	report := func(ctx context.Context, p postgres.ImportProgress) error {
+		updateCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		return postgres.AddImportProgress(updateCtx, db, job.Id, p)
 	}
 
 	var failedMatches int64
@@ -360,18 +366,22 @@ func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) 
 		}
 
 		lastMetadataStarted = time.Now()
-		err = runMetadata(ctx, db, id, match)
+		err := loadMetadata(ctx, db, id, match)
 		if err != nil {
-			if updateErr := report(ctx, postgres.ImportProgress{Failed: 1}); updateErr != nil {
-				return errors.Join(err, updateErr)
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
-			return fmt.Errorf("метаданные матча %d: %w", match.GetMatchId(), err)
+			log.Printf("Задание %d: метаданные матча %d не загружены: %v", job.Id, match.GetMatchId(), err)
+			savefailed = true
+			failedMatches++
+			continue
 		}
 
 	}
 
-	if savefailed {
-		return errors.New("часть матчей не удалось обработать или сохранить")
+	if savefailed || result.HasError {
+		return &partialImportError{historyIncomplete: result.HistoryIncomplete, failedDetails: result.FailedDetails,
+			firstFailedMatchID: result.FirstFailedMatchID, failedProcessing: failedMatches}
 	}
 
 	if result.AccountId == 0 {
@@ -382,7 +392,7 @@ func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) 
 	defer cancelS()
 
 	if result.LatestMatchId != 0 {
-		err = postgres.SaveSyncState(ctxS, db, int64(result.AccountId), result.LatestMatchId)
+		err := postgres.SaveSyncState(ctxS, db, int64(result.AccountId), result.LatestMatchId)
 		if err != nil {
 			return err
 		}
@@ -390,6 +400,6 @@ func processJob(ctx context.Context, db *pgxpool.Pool, job *postgres.ImportJob) 
 
 	log.Printf("result %v", len(result.Matches))
 
-	log.Printf("Аккаунт: %s, минимальный матч %v", selectedAccount.Name, minMatchID)
+	log.Printf("Задание %d: аккаунт %s обработан", job.Id, job.AccountId)
 	return nil
 }

@@ -20,11 +20,14 @@ import (
 )
 
 type AccountResult struct {
-	Matches       []*protocol.CMsgDOTAMatch
-	AccountId     uint64
-	LatestMatchId uint64
-	HasError      bool
-	err           error
+	Matches            []*protocol.CMsgDOTAMatch
+	AccountId          uint64
+	LatestMatchId      uint64
+	HasError           bool
+	HistoryIncomplete  bool
+	FailedDetails      int64
+	FirstFailedMatchID uint64
+	err                error
 }
 
 func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatchID uint64, fullHistory bool,
@@ -181,6 +184,8 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 						}
 
 						hasErrors := !complete
+						var failedDetails int64
+						var firstFailedMatchID uint64
 						if err := reportProgress(accountCtx, Progress{Stage: "details"}, observers); err != nil {
 							historyResult <- AccountResult{err: err}
 							return
@@ -204,6 +209,10 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 							match, err := MatchDetails(accountCtx, dota, matchID)
 							if err != nil {
 								log.Printf("Аккаунт %s: не удалось получить подробности матча Dota %d: %v", account.Name, matchID, err)
+								failedDetails++
+								if firstFailedMatchID == 0 {
+									firstFailedMatchID = matchID
+								}
 								if reportErr := reportProgress(accountCtx, Progress{Failed: 1}, observers); reportErr != nil {
 									historyResult <- AccountResult{err: reportErr}
 									return
@@ -215,7 +224,8 @@ func RunAccount(ctx context.Context, account config.SteamAccount, minAllowedMatc
 							log.Printf("Аккаунт %s: получены подробности матча Dota %d; запись в базу ещё не выполнена", account.Name, match.GetMatchId())
 
 						}
-						historyResult <- AccountResult{Matches: matches, err: err, AccountId: uint64(accountId), LatestMatchId: latestMatchId, HasError: hasErrors}
+						historyResult <- AccountResult{Matches: matches, err: err, AccountId: uint64(accountId), LatestMatchId: latestMatchId, HasError: hasErrors,
+							HistoryIncomplete: !complete, FailedDetails: failedDetails, FirstFailedMatchID: firstFailedMatchID}
 					}()
 					gcReady = true
 					helloTicker.Stop()
